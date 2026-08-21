@@ -7,14 +7,15 @@
     <title>Over 2.5 Trading Analyzer</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
-        .container { max-width: 900px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .container { max-width: 1100px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
         h1 { color: #38bdf8; margin-top: 0; font-size: 24px; }
         p { color: #94a3b8; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #334155; }
         th { background-color: #334155; color: #38bdf8; font-weight: 600; }
         tr:hover { background-color: #273549; }
-        .badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 14px; }
+        .badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 13px; display: inline-block; }
+        .time { background-color: #475569; color: #f8fafc; }
         .odds { background-color: #0284c7; color: white; }
         .target { background-color: #16a34a; color: white; }
     </style>
@@ -22,366 +23,72 @@
 <body>
     <div class="container">
         <h1>Over 2.5 Trading Analyzer</h1>
-        <p>Filtrirane utakmice s početnim koeficijentom 1.60 - 1.85 i izračunatim ciljem za 20% profita (Cash Out).</p>
+        <p>Filtrirane jedinstvene <b>nadolazeće utakmice</b> s početnim koeficijentom 1.60 - 1.85, vremenom odigravanja i izračunatim ciljem za 20% profita.</p>
         <table>
             <thead>
                 <tr>
                     <th>Utakmica</th>
+                    <th>Vrijeme</th>
                     <th>Liga</th>
                     <th>Početni Over 2.5</th>
-                    <th>Ciljani Cashout (20% profit)</th>
+                    <th>Ciljani Cashout</th>
+                    <th>Analiza & Statistički Profil</th>
                 </tr>
             </thead>
             <tbody>
                 
         <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.72</span></td>
-            <td><span class="badge target">1.43</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.72</span></td>
-            <td><span class="badge target">1.43</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.64</span></td>
-            <td><span class="badge target">1.37</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.66</span></td>
-            <td><span class="badge target">1.38</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.6</span></td>
-            <td><span class="badge target">1.33</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.73</span></td>
-            <td><span class="badge target">1.44</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>IK Sirius vs BK Hacken</b></td>
-            <td>Allsvenskan - Sweden</td>
-            <td><span class="badge odds">1.79</span></td>
-            <td><span class="badge target">1.49</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.72</span></td>
-            <td><span class="badge target">1.43</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.72</span></td>
-            <td><span class="badge target">1.43</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.66</span></td>
-            <td><span class="badge target">1.38</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.69</span></td>
-            <td><span class="badge target">1.41</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.73</span></td>
-            <td><span class="badge target">1.44</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.7</span></td>
-            <td><span class="badge target">1.42</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.73</span></td>
-            <td><span class="badge target">1.44</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.83</span></td>
-            <td><span class="badge target">1.53</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>USL Dunkerque vs Montpellier</b></td>
-            <td>Ligue 2 - France</td>
-            <td><span class="badge odds">1.78</span></td>
-            <td><span class="badge target">1.48</span></td>
-        </tr>
-        
-        <tr>
             <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.75</span></td>
-            <td><span class="badge target">1.46</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.82</span></td>
-            <td><span class="badge target">1.52</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.8</span></td>
-            <td><span class="badge target">1.5</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.82</span></td>
-            <td><span class="badge target">1.52</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.85</span></td>
-            <td><span class="badge target">1.54</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.82</span></td>
-            <td><span class="badge target">1.52</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.82</span></td>
-            <td><span class="badge target">1.52</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
-            <td>Ekstraklasa - Poland</td>
-            <td><span class="badge odds">1.8</span></td>
-            <td><span class="badge target">1.5</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td><span class="badge time">21.08. u 20:30</span></td>
             <td>Ekstraklasa - Poland</td>
             <td><span class="badge odds">1.74</span></td>
             <td><span class="badge target">1.45</span></td>
+            <td style="font-size: 13px; color: #cbd5e1; line-height: 1.4;">Implicirana vjerojatnost za Over 2.5 iznosi 57.5%. Liga Ekstraklasa - Poland je poznata po visokom prosjeku golova. Početni koeficijent 1.74 pruža izvrstan raspon za rani Cash Out na 1.45 već pri prvom pogotku.</td>
         </tr>
         
         <tr>
             <td><b>Erzurum BB vs Galatasaray</b></td>
-            <td>Turkey Super League</td>
-            <td><span class="badge odds">1.68</span></td>
-            <td><span class="badge target">1.4</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Erzurum BB vs Galatasaray</b></td>
-            <td>Turkey Super League</td>
-            <td><span class="badge odds">1.73</span></td>
-            <td><span class="badge target">1.44</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Erzurum BB vs Galatasaray</b></td>
-            <td>Turkey Super League</td>
-            <td><span class="badge odds">1.69</span></td>
-            <td><span class="badge target">1.41</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Erzurum BB vs Galatasaray</b></td>
-            <td>Turkey Super League</td>
-            <td><span class="badge odds">1.68</span></td>
-            <td><span class="badge target">1.4</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Erzurum BB vs Galatasaray</b></td>
+            <td><span class="badge time">21.08. u 20:30</span></td>
             <td>Turkey Super League</td>
             <td><span class="badge odds">1.75</span></td>
             <td><span class="badge target">1.46</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Erzurum BB vs Galatasaray</b></td>
-            <td>Turkey Super League</td>
-            <td><span class="badge odds">1.75</span></td>
-            <td><span class="badge target">1.46</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Erzurum BB vs Galatasaray</b></td>
-            <td>Turkey Super League</td>
-            <td><span class="badge odds">1.75</span></td>
-            <td><span class="badge target">1.46</span></td>
+            <td style="font-size: 13px; color: #cbd5e1; line-height: 1.4;">Implicirana vjerojatnost za Over 2.5 iznosi 57.1%. Liga Turkey Super League je poznata po visokom prosjeku golova. Početni koeficijent 1.75 pruža izvrstan raspon za rani Cash Out na 1.46 već pri prvom pogotku.</td>
         </tr>
         
         <tr>
             <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.8</span></td>
-            <td><span class="badge target">1.5</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.8</span></td>
-            <td><span class="badge target">1.5</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.83</span></td>
-            <td><span class="badge target">1.53</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.85</span></td>
-            <td><span class="badge target">1.54</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.8</span></td>
-            <td><span class="badge target">1.5</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.75</span></td>
-            <td><span class="badge target">1.46</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.74</span></td>
-            <td><span class="badge target">1.45</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
+            <td><span class="badge time">21.08. u 20:45</span></td>
             <td>League of Ireland</td>
             <td><span class="badge odds">1.81</span></td>
             <td><span class="badge target">1.51</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.81</span></td>
-            <td><span class="badge target">1.51</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Bohemians vs Derry City</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.81</span></td>
-            <td><span class="badge target">1.51</span></td>
+            <td style="font-size: 13px; color: #cbd5e1; line-height: 1.4;">Implicirana vjerojatnost za Over 2.5 iznosi 55.2%. Liga League of Ireland je poznata po visokom prosjeku golova. Početni koeficijent 1.81 pruža izvrstan raspon za rani Cash Out na 1.51 već pri prvom pogotku.</td>
         </tr>
         
         <tr>
             <td><b>Drogheda United vs St Patricks Athletic</b></td>
+            <td><span class="badge time">21.08. u 20:45</span></td>
             <td>League of Ireland</td>
             <td><span class="badge odds">1.85</span></td>
             <td><span class="badge target">1.54</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Drogheda United vs St Patricks Athletic</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.83</span></td>
-            <td><span class="badge target">1.53</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Drogheda United vs St Patricks Athletic</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.77</span></td>
-            <td><span class="badge target">1.48</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Drogheda United vs St Patricks Athletic</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.85</span></td>
-            <td><span class="badge target">1.54</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Drogheda United vs St Patricks Athletic</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.85</span></td>
-            <td><span class="badge target">1.54</span></td>
-        </tr>
-        
-        <tr>
-            <td><b>Drogheda United vs St Patricks Athletic</b></td>
-            <td>League of Ireland</td>
-            <td><span class="badge odds">1.85</span></td>
-            <td><span class="badge target">1.54</span></td>
+            <td style="font-size: 13px; color: #cbd5e1; line-height: 1.4;">Implicirana vjerojatnost za Over 2.5 iznosi 54.1%. Liga League of Ireland je poznata po visokom prosjeku golova. Početni koeficijent 1.85 pruža izvrstan raspon za rani Cash Out na 1.54 već pri prvom pogotku.</td>
         </tr>
         
         <tr>
             <td><b>Dundalk vs Galway United</b></td>
+            <td><span class="badge time">21.08. u 20:45</span></td>
             <td>League of Ireland</td>
             <td><span class="badge odds">1.65</span></td>
             <td><span class="badge target">1.38</span></td>
+            <td style="font-size: 13px; color: #cbd5e1; line-height: 1.4;">Implicirana vjerojatnost za Over 2.5 iznosi 60.6%. Liga League of Ireland je poznata po visokom prosjeku golova. Početni koeficijent 1.65 pruža izvrstan raspon za rani Cash Out na 1.38 već pri prvom pogotku.</td>
         </tr>
         
         <tr>
             <td><b>Woodbridge Town FC vs Felixstowe and Walton United FC</b></td>
+            <td><span class="badge time">21.08. u 20:45</span></td>
             <td>FA Cup</td>
             <td><span class="badge odds">1.64</span></td>
             <td><span class="badge target">1.37</span></td>
+            <td style="font-size: 13px; color: #cbd5e1; line-height: 1.4;">Implicirana vjerojatnost za Over 2.5 iznosi 61.0%. Liga FA Cup je poznata po visokom prosjeku golova. Početni koeficijent 1.64 pruža izvrstan raspon za rani Cash Out na 1.37 već pri prvom pogotku.</td>
         </tr>
         
             </tbody>
