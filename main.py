@@ -12,7 +12,7 @@ matches_dict = {}
 now_utc = datetime.now(timezone.utc)
 local_offset = timedelta(hours=2) # CEST vremenska zona
 
-# 1. Povlačenje i filtriranje koeficijenata
+# 1. Povlačenje i filtriranje koeficijenata s Odds API-ja
 if ODDS_API_KEY:
     url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
     try:
@@ -64,8 +64,9 @@ if ODDS_API_KEY:
     except Exception as e:
         print(f"Greška Odds API: {e}")
 
-# 2. Web Search Pretraživanje forme i stvarna AI analiza
+# 2. Pretraživanje forme i AI analiza pomoću novog gemini-3.6-flash modela
 ai_analyses = {}
+ai_error_log = ""
 
 if GEMINI_API_KEY and matches_dict:
     try:
@@ -81,32 +82,28 @@ if GEMINI_API_KEY and matches_dict:
         prompt_text = "\n".join(prompt_items)
         
         prompt = f"""
-        Pretraži web za najnovije statističke podatke i formu sljedećih nogometnih parova:
+        Pretraži web i analiziraj formu i statistiku golova za ove mečeve:
         {prompt_text}
 
-        Za SVAKI par pretraži rezultate ove sezone i u odgovoru navedi STVARNE BROJKE (prosjek golova po utakmici, forma u zadnjih 5 mečeva, Over 2.5 prolaznost).
+        Za SVAKI par navedi stvarne podatke (prosjek golova, forma u zadnjih 5 kola, % Over 2.5).
         Vrati ODGOVOR ISKLJUČIVO u valjanom JSON formatu s ključevima M_1, M_2 itd.:
 
         {{
           "M_1": {{
-             "signal": "🟢 A+ Signal" (ako obje ekipe imaju visoke prosjeke golova) ili "🟡 B Signal",
-             "forma_i_golovi": "Konkretne brojke pronađene na webu (npr. 'Domaćin zabija/prima 2.4 gola, Gost ima 80% Over 2.5 u zadnjih 5 mečeva.')",
+             "signal": "🟢 A+ Signal" ili "🟡 B Signal",
+             "forma_i_golovi": "Konkretni podaci o prosjeku golova i formi zadnjih 5 mečeva.",
              "tempo_1h": "Statistika golova u 1. poluvremenu.",
-             "zakljucak": "Trgovačka preporuka za In-Play Cash Out na tečaj."
+             "zakljucak": "Trgovački plan za Cash Out."
           }}
         }}
         """
         
-        # Pokušaj pretraživanja uz Google Search alat
-        models_to_try = [
-            ("gemini-2.0-flash", {"tools": "google_search"}),
-            ("gemini-1.5-flash", {"tools": "google_search_retrieval"}),
-            ("gemini-1.5-flash", {})
-        ]
+        # Ažurirani model sugeriran u error logu
+        models_to_try = ['gemini-3.6-flash', 'gemini-2.5-flash']
         
-        for model_name, kwargs in models_to_try:
+        for m_name in models_to_try:
             try:
-                model = genai.GenerativeModel(model_name, **kwargs)
+                model = genai.GenerativeModel(m_name, generation_config={"response_mime_type": "application/json"})
                 res = model.generate_content(prompt)
                 
                 json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
@@ -115,33 +112,36 @@ if GEMINI_API_KEY and matches_dict:
                     for match_id, analysis in parsed_json.items():
                         if match_id in id_to_key:
                             ai_analyses[id_to_key[match_id]] = analysis
-                    print(f"Uspješno izvedeno web pretraživanje preko: {model_name}")
+                    print(f"Uspješno generirano preko novog modela: {m_name}")
                     break
             except Exception as ex:
-                print(f"Pokušaj s {model_name} / {kwargs} nije uspio: {ex}")
+                ai_error_log += f"[{m_name}: {ex}] "
                 
     except Exception as e:
-        print(f"AI greška: {e}")
+        ai_error_log = f"Konfiguracija: {e}"
 
-# 3. Izrada HTML Tablice
+# 3. Sklapanje HTML Tablice
 table_rows = ""
 if matches_dict:
     for match_key, m in matches_dict.items():
         analysis_data = ai_analyses.get(match_key)
-        implied_prob = round((1 / m['odds']) * 100, 1)
         
         if analysis_data:
             signal = analysis_data.get("signal", "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal")
-            forma = analysis_data.get("forma_i_golovi", "Podaci pretrage nisu dostupni.")
+            forma = analysis_data.get("forma_i_golovi", "Podaci nisu dostupni.")
             tempo = analysis_data.get("tempo_1h", "Pratite rani pritisak live.")
             zakljucak = analysis_data.get("zakljucak", f"Ciljani Cash Out na {m['target']}.")
+            signal_class = "badge-a" if "A+" in signal else "badge-b"
+            
+            analysis_html = f"""
+                <div><b>📊 Stvarna Forma & Golovi:</b> {forma}</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> {tempo}</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> {zakljucak}</div>
+            """
         else:
-            signal = "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal"
-            forma = f"Kladioničarska implicirana vjerojatnost iznosi {implied_prob}%."
-            tempo = "Preporučuje se praćenje In-Play statistike opasnih napada."
-            zakljucak = f"Ciljani Cash Out profil na {m['target']} (20% profita)."
-
-        signal_class = "badge-a" if "A+" in signal else "badge-b"
+            signal = "❌ AI Greška"
+            signal_class = "badge-err"
+            analysis_html = f"<span style='color: #ef4444;'>AI model nije odgovorio. Detalji: {ai_error_log}</span>"
 
         table_rows += f"""
         <tr>
@@ -155,11 +155,7 @@ if matches_dict:
                 <small style="color: #10b981;">Cilj: {m['target']}</small>
             </td>
             <td><span class="badge {signal_class}">{signal}</span></td>
-            <td style="font-size: 13px; line-height: 1.5;">
-                <div><b>📊 Stvarna Forma & Golovi:</b> {forma}</div>
-                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> {tempo}</div>
-                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> {zakljucak}</div>
-            </td>
+            <td style="font-size: 13px; line-height: 1.5;">{analysis_html}</td>
         </tr>
         """
 else:
@@ -186,13 +182,14 @@ html_content = f"""
         .badge {{ padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block; whitespace: nowrap; }}
         .badge-a {{ background-color: #065f46; color: #34d399; border: 1px solid #059669; }}
         .badge-b {{ background-color: #78350f; color: #fbbf24; border: 1px solid #d97706; }}
+        .badge-err {{ background-color: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }}
         .footer {{ margin-top: 25px; font-size: 12px; color: #64748b; text-align: right; }}
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Over 2.5 Live Stats Trading Dashboard</h1>
-        <p>Aktivni In-Play signali utemeljeni na <b>stvarnoj pretrazi forme i golova</b> s weba + 20% Cash Out cilju.</p>
+        <p>Aktivni In-Play signali za nadolazeće utakmice (1.60 - 1.85) s izračunom 20% Cash Out profita i AI analizom forme.</p>
         <table>
             <thead>
                 <tr>
@@ -216,4 +213,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print("Skripta uspješno izvršena s Web-Search integracijom!")
+print("Skripta uspješno izvršena.")
