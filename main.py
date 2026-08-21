@@ -1,142 +1,190 @@
 import os
 import requests
+import time
 from datetime import datetime, timezone, timedelta
 
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 
-matches_dict = {}
 now_utc = datetime.now(timezone.utc)
-local_offset = timedelta(hours=2) # CEST
+local_offset = timedelta(hours=2) # CEST vremenska zona
+today_str = now_utc.strftime("%Y-%m-%d")
 
-def get_team_stats(team_name):
-    """Povlači zadnjih 5 utakmica tima s API-Football i računa stvarne golove."""
+headers = {
+    "X-RapidAPI-Key": RAPIDAPI_KEY,
+    "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+}
+
+def get_team_stats(team_id):
+    """Dohvaća zadnjih 5 završenih utakmica za određeni tim i računa prosjeke."""
     if not RAPIDAPI_KEY:
         return None
-    
-    headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
-    }
-    
     try:
-        # 1. Pronađi ID tima
-        search_url = f"https://api-football-v1.p.rapidapi.com/v3/teams?search={team_name}"
-        res = requests.get(search_url, headers=headers).json()
+        url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?team={team_id}&last=5"
+        res = requests.get(url, headers=headers).json()
+        fixtures = res.get("response", [])
         
-        if not res.get("response"):
-            return None
-            
-        team_id = res["response"][0]["team"]["id"]
+        if not fixtures: return None
         
-        # 2. Povuci zadnjih 5 završenih utakmica
-        fixtures_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?team={team_id}&last=5"
-        f_res = requests.get(fixtures_url, headers=headers).json()
-        
-        fixtures = f_res.get("response", [])
-        if not fixtures:
-            return None
-            
         total_goals = 0
         over_25_count = 0
+        valid_games = 0
         
         for f in fixtures:
-            home_goals = f["goals"]["home"] or 0
-            away_goals = f["goals"]["away"] or 0
-            match_goals = home_goals + away_goals
-            
-            total_goals += match_goals
-            if match_goals > 2.5:
-                over_25_count += 1
+            hg = f["goals"]["home"]
+            ag = f["goals"]["away"]
+            if hg is not None and ag is not None:
+                match_goals = hg + ag
+                total_goals += match_goals
+                if match_goals > 2.5:
+                    over_25_count += 1
+                valid_games += 1
                 
-        avg_goals = round(total_goals / len(fixtures), 2)
-        over_25_pct = int((over_25_count / len(fixtures)) * 100)
+        if valid_games == 0: return None
         
-        return {
-            "avg": avg_goals,
-            "pct": over_25_pct,
-            "games": len(fixtures)
-        }
+        avg_goals = round(total_goals / valid_games, 2)
+        pct = int((over_25_count / valid_games) * 100)
+        return {"avg": avg_goals, "pct": pct}
     except Exception as e:
-        print(f"Greška za tim {team_name}: {e}")
+        print(f"Greška pri povlačenju statistike za tim {team_id}: {e}")
         return None
 
-# 1. Povlačenje utakmica s Odds API-ja
-if ODDS_API_KEY:
-    url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
-    try:
-        res = requests.get(url).json()
-        if isinstance(res, list):
-            for match in res:
-                if not match.get("sport_key", "").startswith("soccer"):
-                    continue
+matches_dict = {}
+
+if RAPIDAPI_KEY:
+    print("Pretražujem današnje koeficijente za Over 2.5...")
+    found_odds = {}
+    page = 1
+    total_pages = 1
+    
+    # 1. Pronalazak utakmica s Over 2.5 tečajem između 1.60 i 1.85 (max 3 stranice API-ja)
+    while page <= total_pages and page <= 3:
+        odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={today_str}&bet=5&page={page}"
+        try:
+            res = requests.get(odds_url, headers=headers).json()
+            if "paging" in res:
+                total_pages = res["paging"]["total"]
                 
-                commence_str = match.get("commence_time")
-                if not commence_str:
-                    continue
+            for item in res.get("response", []):
+                fix_id = item["fixture"]["id"]
+                fixture_timestamp = item["fixture"]["timestamp"]
+                commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
                 
-                commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
+                # Samo utakmice koje tek trebaju početi
                 if commence_dt <= now_utc:
                     continue
-                
-                local_dt = commence_dt + local_offset
-                formatted_time = local_dt.strftime("%d.%m. u %H:%M")
                     
-                home = match.get("home_team", "")
-                away = match.get("away_team", "")
-                league = match.get("sport_title", "Nogomet")
-                match_key = f"{home} vs {away}"
-                
-                if match_key in matches_dict:
-                    continue
-                
-                for bm in match.get("bookmakers", []):
-                    for mkt in bm.get("markets", []):
-                        if mkt.get("key") == "totals":
-                            for outcome in mkt.get("outcomes", []):
-                                if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
-                                    price = outcome.get("price", 0)
+                for bm in item.get("bookmakers", []):
+                    found_price = None
+                    for bet in bm.get("bets", []):
+                        if str(bet["id"]) == "5" or bet["name"] == "Goals Over/Under":
+                            for val in bet["values"]:
+                                if val["value"] == "Over 2.5":
+                                    price = float(val["odd"])
                                     if 1.60 <= price <= 1.85:
-                                        target_cashout = round(price / 1.20, 2)
-                                        matches_dict[match_key] = {
-                                            "teams": match_key,
-                                            "home": home,
-                                            "away": away,
-                                            "time": formatted_time,
-                                            "league": league,
-                                            "odds": price,
-                                            "target": target_cashout
-                                        }
+                                        found_price = price
                                         break
-    except Exception as e:
-        print(f"Greška Odds API: {e}")
+                            break
+                    if found_price:
+                        # Spremamo i cijenu i timestamp za kasnije sortiranje
+                        found_odds[fix_id] = {
+                            "price": found_price,
+                            "timestamp": fixture_timestamp
+                        }
+                        break 
+        except Exception as e:
+            print(f"Greška na odds API-ju: {e}")
+        
+        page += 1
 
-# 2. Sklapanje točnih i provjerenih podataka u HTML
+    # SORTIRANJE: Sortiramo sve pronađene utakmice po vremenu početka (od prve sljedeće nadalje)
+    sorted_fixtures = sorted(found_odds.items(), key=lambda x: x[1]['timestamp'])
+    
+    # UZIMAMO TOP 10 umjesto 5
+    selected_items = sorted_fixtures[:10]
+    
+    if selected_items:
+        print(f"Pronađeno je mečeva. Obrađujem top {len(selected_items)} najskorijih...")
+        
+        # Izvlačimo samo ID-eve za upit
+        selected_ids = [str(item[0]) for item in selected_items]
+        ids_str = "-".join(selected_ids)
+        
+        # Mapa za lakše dohvaćanje cijena kasnije
+        prices_map = {item[0]: item[1]["price"] for item in selected_items}
+        
+        # 2. Dohvat detalja o ligama i imenima timova
+        fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?ids={ids_str}"
+        try:
+            res = requests.get(fix_url, headers=headers).json()
+            
+            # Kako bismo zadržali kronološki redoslijed u tablici, iteriramo po originalnoj listi ID-eva
+            response_items = {str(item["fixture"]["id"]): item for item in res.get("response", [])}
+            
+            for fix_id_str in selected_ids:
+                if fix_id_str not in response_items:
+                    continue
+                    
+                item = response_items[fix_id_str]
+                fix_id_int = int(fix_id_str)
+                
+                dt_utc = datetime.fromtimestamp(item["fixture"]["timestamp"], tz=timezone.utc)
+                local_dt = dt_utc + local_offset
+                formatted_time = local_dt.strftime("%d.%m. u %H:%M")
+                
+                league = item["league"]["name"]
+                country = item["league"]["country"]
+                home_team = item["teams"]["home"]["name"]
+                home_id = item["teams"]["home"]["id"]
+                away_team = item["teams"]["away"]["name"]
+                away_id = item["teams"]["away"]["id"]
+                
+                price = prices_map[fix_id_int]
+                target_cashout = round(price / 1.20, 2)
+                
+                # 3. Povlačenje statistike (pauza štiti API od blokade zbog previše zahtjeva)
+                home_stats = get_team_stats(home_id)
+                time.sleep(1) 
+                away_stats = get_team_stats(away_id)
+                time.sleep(1)
+                
+                match_key = f"{home_team} vs {away_team}"
+                matches_dict[match_key] = {
+                    "teams": match_key,
+                    "home": home_team,
+                    "away": away_team,
+                    "time": formatted_time,
+                    "league": f"{league} ({country})",
+                    "odds": price,
+                    "target": target_cashout,
+                    "h_stats": home_stats,
+                    "a_stats": away_stats
+                }
+        except Exception as e:
+            print(f"Greška kod dohvaćanja detalja: {e}")
+
+# Izrada HTML sučelja 
 table_rows = ""
 if matches_dict:
-    for match_key, m in matches_dict.items():
-        home_stats = get_team_stats(m["home"])
-        away_stats = get_team_stats(m["away"])
+    for m in matches_dict.values():
+        h_stats = m["h_stats"]
+        a_stats = m["a_stats"]
         
-        if home_stats and away_stats:
-            combined_avg = round((home_stats["avg"] + away_stats["avg"]) / 2, 2)
-            combined_pct = int((home_stats["pct"] + away_stats["pct"]) / 2)
+        if h_stats and a_stats:
+            combined_avg = round((h_stats["avg"] + a_stats["avg"]) / 2, 2)
+            combined_pct = int((h_stats["pct"] + a_stats["pct"]) / 2)
             
             signal = "🟢 A+ Signal" if combined_pct >= 60 else "🟡 B Signal"
             signal_class = "badge-a" if "A+" in signal else "badge-b"
             
             stats_html = f"""
-                <div><b>📊 Prosjek Golova (Zadnjih 5 mečeva):</b> {m['home']} ({home_stats['avg']}), {m['away']} ({away_stats['avg']}) | <b>Zajednički: {combined_avg} gola/utakmici</b></div>
-                <div style="margin-top: 4px;"><b>🔥 Over 2.5 Prolaznost:</b> {m['home']} ({home_stats['pct']}%), {m['away']} ({away_stats['pct']}%) | <b>Ukupni prosjek prolaza: {combined_pct}%</b></div>
-                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ulazak na tečaj {m['odds']} — Ciljani Cash Out na {m['target']} čim padne 1. pogodak.</div>
+                <div><b>📊 Prosjek Golova (zadnjih 5):</b> {m['home']} ({h_stats['avg']}), {m['away']} ({a_stats['avg']}) | <b style="color:white">Zajednički: {combined_avg} gola</b></div>
+                <div style="margin-top: 4px;"><b>🔥 Over 2.5 Prolaznost:</b> {m['home']} ({h_stats['pct']}%), {m['away']} ({a_stats['pct']}%) | <b style="color:white">Zajednički: {combined_pct}%</b></div>
+                <div style="color: #38bdf8; margin-top: 6px;"><b>💡 Plan:</b> Ulazak na {m['odds']} — Ciljani Cash Out na {m['target']} čim padne 1. pogodak.</div>
             """
         else:
             signal = "🟡 B Signal"
             signal_class = "badge-b"
-            stats_html = f"""
-                <div><b>📊 Profil Tečaja:</b> Implicirana kladioničarska vjerojatnost iznosi {round((1/m['odds'])*100, 1)}%.</div>
-                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Pratiti utakmicu live i raditi Cash Out na metu {m['target']}.</div>
-            """
+            stats_html = f"<div style='color:#cbd5e1;'>Nedovoljno povijesnih podataka za ovu ligu. Ciljani Cash Out je {m['target']}.</div>"
 
         table_rows += f"""
         <tr>
@@ -150,7 +198,7 @@ if matches_dict:
                 <small style="color: #10b981;">Cilj: {m['target']}</small>
             </td>
             <td><span class="badge {signal_class}">{signal}</span></td>
-            <td style="font-size: 13px; line-height: 1.5;">{stats_html}</td>
+            <td style="font-size: 13px; line-height: 1.5; color: #94a3b8;">{stats_html}</td>
         </tr>
         """
 else:
@@ -164,10 +212,10 @@ html_content = f"""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Over 2.5 Real Stats Trading Dashboard</title>
+    <title>Over 2.5 Verified Stats Dashboard</title>
     <style>
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }}
-        .container {{ max-width: 1150px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }}
         h1 {{ color: #38bdf8; margin-top: 0; font-size: 24px; }}
         p {{ color: #94a3b8; font-size: 14px; margin-bottom: 20px; }}
         table {{ width: 100%; border-collapse: collapse; }}
@@ -182,23 +230,23 @@ html_content = f"""
 </head>
 <body>
     <div class="container">
-        <h1>Over 2.5 Verified Stats Dashboard</h1>
-        <p>In-Play signali izračunati na temelju <b>stvarnih rezultata zadnjih 5 utakmica</b> obje ekipe.</p>
+        <h1>Over 2.5 Verified Stats Dashboard (Top 10)</h1>
+        <p>Prikaz <b>10 vremenski najskorijih</b> In-Play signala izračunatih iz stvarnih rezultata svake ekipe. (Podržane sve HNL i regionalne lige)</p>
         <table>
             <thead>
                 <tr>
-                    <th>Utakmica & Vrijeme</th>
-                    <th>Liga</th>
-                    <th>Tečaj & Cilj</th>
-                    <th>Signal</th>
-                    <th>Provjereni Statistički Podaci (API-Football)</th>
+                    <th style="width: 20%;">Utakmica & Vrijeme</th>
+                    <th style="width: 15%;">Liga</th>
+                    <th style="width: 10%;">Tečaj & Cilj</th>
+                    <th style="width: 10%;">Signal</th>
+                    <th style="width: 45%;">Provjereni Statistički Podaci</th>
                 </tr>
             </thead>
             <tbody>
                 {table_rows}
             </tbody>
         </table>
-        <div class="footer">Zadnje automatsko osvježavanje: {update_timestamp} (CEST)</div>
+        <div class="footer">Zadnje automatsko osvježavanje: {update_timestamp} (CEST) | Izvor: API-Football</div>
     </div>
 </body>
 </html>
@@ -207,4 +255,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print("Podaci uspješno izračunati i zapisani!")
+print("Podaci uspješno izračunati, skripta završena!")
