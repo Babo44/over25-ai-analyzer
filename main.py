@@ -8,7 +8,6 @@ RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 now_utc = datetime.now(timezone.utc)
 local_offset = timedelta(hours=2) # CEST
 
-# Datum za danas i sutra
 today_str = now_utc.strftime("%Y-%m-%d")
 tomorrow_str = (now_utc + timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -16,6 +15,17 @@ headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
     "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
 }
+
+# Riječi po kojima filtriramo i odbacujemo niže/regionalne/juniorske lige
+EXCLUDE_LEAGUES = [
+    "u19", "u21", "u20", "u23", "reserve", "regional", "oberliga", 
+    "amateur", "3.", "4.", "sub-", "youth", "women", "žene", "cup"
+]
+
+def is_valid_league(league_name):
+    """Provjerava je li liga u glavnim rangovima (odbacuje regionalne i mlade)."""
+    name_lower = league_name.lower()
+    return not any(ex in name_lower for ex in EXCLUDE_LEAGUES)
 
 def get_team_stats(team_id):
     if not RAPIDAPI_KEY:
@@ -53,74 +63,77 @@ def get_team_stats(team_id):
 matches_dict = {}
 
 if RAPIDAPI_KEY:
-    print("Pretražujem koeficijente za danas i sutra...")
+    print("Pretražujem ponudu za danas i sutra...")
     found_odds = {}
     
-    # Skeniramo i današnji i sutrašnji datum
+    # Skeniramo po 2 stranice ponude za danas i sutra kako bismo našli dovoljno mečeva
     for date_str in [today_str, tomorrow_str]:
-        odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={date_str}&bet=5&page=1"
-        try:
-            res = requests.get(odds_url, headers=headers).json()
-            for item in res.get("response", []):
-                fix_id = item["fixture"]["id"]
-                fixture_timestamp = item["fixture"]["timestamp"]
-                commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
-                
-                # Samo utakmice koje tek trebaju početi
-                if commence_dt <= now_utc:
-                    continue
+        for page in range(1, 3):
+            odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={date_str}&bet=5&page={page}"
+            try:
+                res = requests.get(odds_url, headers=headers).json()
+                for item in res.get("response", []):
+                    fix_id = item["fixture"]["id"]
+                    fixture_timestamp = item["fixture"]["timestamp"]
+                    commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
                     
-                for bm in item.get("bookmakers", []):
-                    found_price = None
-                    for bet in bm.get("bets", []):
-                        if str(bet["id"]) == "5" or bet["name"] == "Goals Over/Under":
-                            for val in bet["values"]:
-                                if val["value"] == "Over 2.5":
-                                    price = float(val["odd"])
-                                    if 1.60 <= price <= 1.85:
-                                        found_price = price
-                                        break
-                            break
-                    if found_price:
-                        found_odds[fix_id] = {
-                            "price": found_price,
-                            "timestamp": fixture_timestamp
-                        }
-                        break 
-        except Exception as e:
-            print(f"Greška odds ({date_str}): {e}")
-            
-        time.sleep(1)
+                    if commence_dt <= now_utc:
+                        continue
+                        
+                    for bm in item.get("bookmakers", []):
+                        found_price = None
+                        for bet in bm.get("bets", []):
+                            if str(bet["id"]) == "5" or bet["name"] == "Goals Over/Under":
+                                for val in bet["values"]:
+                                    if val["value"] == "Over 2.5":
+                                        price = float(val["odd"])
+                                        if 1.60 <= price <= 1.85:
+                                            found_price = price
+                                            break
+                                break
+                        if found_price:
+                            found_odds[fix_id] = {
+                                "price": found_price,
+                                "timestamp": fixture_timestamp
+                            }
+                            break 
+            except Exception as e:
+                print(f"Greška odds ({date_str}, str {page}): {e}")
+                
+            time.sleep(6.5) # Sigurnosna pauza zbog limita od 10 poziva/min
 
-    # Uzimamo TOP 10 utakmica koje sljedeće počinju (danas ili sutra)
     sorted_fixtures = sorted(found_odds.items(), key=lambda x: x[1]['timestamp'])
-    selected_items = sorted_fixtures[:10]
     
-    if selected_items:
-        print(f"Obrađujem top {len(selected_items)} najskorijih mečeva...")
-        selected_ids = [str(item[0]) for item in selected_items]
-        ids_str = "-".join(selected_ids)
-        prices_map = {item[0]: item[1]["price"] for item in selected_items}
-        
-        time.sleep(6.5)
+    if sorted_fixtures:
+        candidate_ids = [str(item[0]) for item in sorted_fixtures[:25]]
+        ids_str = "-".join(candidate_ids)
+        prices_map = {item[0]: item[1]["price"] for item in sorted_fixtures}
         
         fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?ids={ids_str}"
         try:
             res = requests.get(fix_url, headers=headers).json()
             response_items = {str(item["fixture"]["id"]): item for item in res.get("response", [])}
             
-            for fix_id_str in selected_ids:
+            count = 0
+            for fix_id_str in candidate_ids:
+                if count >= 10:
+                    break
+                    
                 if fix_id_str not in response_items:
                     continue
                     
                 item = response_items[fix_id_str]
-                fix_id_int = int(fix_id_str)
+                league_name = item["league"]["name"]
                 
+                # Odbacivanje nižih i regionalnih liga
+                if not is_valid_league(league_name):
+                    continue
+                    
+                fix_id_int = int(fix_id_str)
                 dt_utc = datetime.fromtimestamp(item["fixture"]["timestamp"], tz=timezone.utc)
                 local_dt = dt_utc + local_offset
                 formatted_time = local_dt.strftime("%d.%m. u %H:%M")
                 
-                league = item["league"]["name"]
                 country = item["league"]["country"]
                 home_team = item["teams"]["home"]["name"]
                 home_id = item["teams"]["home"]["id"]
@@ -130,7 +143,6 @@ if RAPIDAPI_KEY:
                 price = prices_map[fix_id_int]
                 target_cashout = round(price / 1.20, 2)
                 
-                # Pauze za zaštitu limita
                 time.sleep(6.5)
                 home_stats = get_team_stats(home_id)
                 time.sleep(6.5)
@@ -142,14 +154,15 @@ if RAPIDAPI_KEY:
                     "home": home_team,
                     "away": away_team,
                     "time": formatted_time,
-                    "league": f"{league} ({country})",
+                    "league": f"{league_name} ({country})",
                     "odds": price,
                     "target": target_cashout,
                     "h_stats": home_stats,
                     "a_stats": away_stats
                 }
+                count += 1
         except Exception as e:
-            print(f"Greška kod detalja: {e}")
+            print(f"Greška detalji: {e}")
 
 table_rows = ""
 if matches_dict:
@@ -219,7 +232,7 @@ html_content = f"""
 <body>
     <div class="container">
         <h1>Over 2.5 Verified Stats Dashboard (Top 10)</h1>
-        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe za 10 najbližih nadolazećih mečeva (danas i sutra).</p>
+        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe. (Prikazuju se samo natjecanja 1. i 2. ranga)</p>
         <table>
             <thead>
                 <tr>
