@@ -1,0 +1,35 @@
+name: Daily AI Match Analysis
+
+on:
+  schedule:
+    - cron: '1 0 * * *' # Pokreće se svaki dan u 10:00
+  workflow_dispatch: # Omogućuje i ručno pokretanje na gumb
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/python-stdlib@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install requests google-generativeai
+
+      - name: Run Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python main.py
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m "Auto update daily matches" || exit 0
+          git push
