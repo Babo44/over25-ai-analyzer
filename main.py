@@ -16,14 +16,13 @@ headers = {
     "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
 }
 
-# Riječi po kojima filtriramo i odbacujemo niže/regionalne/juniorske lige
+# Filtar za izbacivanje nižih, regionalnih i juniorskih liga
 EXCLUDE_LEAGUES = [
     "u19", "u21", "u20", "u23", "reserve", "regional", "oberliga", 
     "amateur", "3.", "4.", "sub-", "youth", "women", "žene", "cup"
 ]
 
 def is_valid_league(league_name):
-    """Provjerava je li liga u glavnim rangovima (odbacuje regionalne i mlade)."""
     name_lower = league_name.lower()
     return not any(ex in name_lower for ex in EXCLUDE_LEAGUES)
 
@@ -63,106 +62,103 @@ def get_team_stats(team_id):
 matches_dict = {}
 
 if RAPIDAPI_KEY:
-    print("Pretražujem ponudu za danas i sutra...")
-    found_odds = {}
+    print("Povlačim raspored utakmica za danas i sutra...")
+    all_candidate_fixtures = []
     
-    # Skeniramo po 2 stranice ponude za danas i sutra kako bismo našli dovoljno mečeva
+    # 1. Povlačimo raspored svih utakmica za danas i sutra
     for date_str in [today_str, tomorrow_str]:
-        for page in range(1, 3):
-            odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={date_str}&bet=5&page={page}"
-            try:
-                res = requests.get(odds_url, headers=headers).json()
-                for item in res.get("response", []):
-                    fix_id = item["fixture"]["id"]
-                    fixture_timestamp = item["fixture"]["timestamp"]
-                    commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
-                    
-                    if commence_dt <= now_utc:
-                        continue
-                        
-                    for bm in item.get("bookmakers", []):
-                        found_price = None
-                        for bet in bm.get("bets", []):
-                            if str(bet["id"]) == "5" or bet["name"] == "Goals Over/Under":
-                                for val in bet["values"]:
-                                    if val["value"] == "Over 2.5":
-                                        price = float(val["odd"])
-                                        if 1.60 <= price <= 1.85:
-                                            found_price = price
-                                            break
-                                break
-                        if found_price:
-                            found_odds[fix_id] = {
-                                "price": found_price,
-                                "timestamp": fixture_timestamp
-                            }
-                            break 
-            except Exception as e:
-                print(f"Greška odds ({date_str}, str {page}): {e}")
-                
-            time.sleep(6.5) # Sigurnosna pauza zbog limita od 10 poziva/min
-
-    sorted_fixtures = sorted(found_odds.items(), key=lambda x: x[1]['timestamp'])
-    
-    if sorted_fixtures:
-        candidate_ids = [str(item[0]) for item in sorted_fixtures[:25]]
-        ids_str = "-".join(candidate_ids)
-        prices_map = {item[0]: item[1]["price"] for item in sorted_fixtures}
-        
-        fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?ids={ids_str}"
         try:
+            fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?date={date_str}"
             res = requests.get(fix_url, headers=headers).json()
-            response_items = {str(item["fixture"]["id"]): item for item in res.get("response", [])}
             
-            count = 0
-            for fix_id_str in candidate_ids:
-                if count >= 10:
-                    break
-                    
-                if fix_id_str not in response_items:
+            for item in res.get("response", []):
+                fixture_timestamp = item["fixture"]["timestamp"]
+                commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
+                
+                # Samo utakmice koje tek trebaju početi
+                if commence_dt <= now_utc:
                     continue
                     
-                item = response_items[fix_id_str]
                 league_name = item["league"]["name"]
-                
-                # Odbacivanje nižih i regionalnih liga
-                if not is_valid_league(league_name):
-                    continue
-                    
-                fix_id_int = int(fix_id_str)
-                dt_utc = datetime.fromtimestamp(item["fixture"]["timestamp"], tz=timezone.utc)
-                local_dt = dt_utc + local_offset
-                formatted_time = local_dt.strftime("%d.%m. u %H:%M")
-                
-                country = item["league"]["country"]
-                home_team = item["teams"]["home"]["name"]
-                home_id = item["teams"]["home"]["id"]
-                away_team = item["teams"]["away"]["name"]
-                away_id = item["teams"]["away"]["id"]
-                
-                price = prices_map[fix_id_int]
-                target_cashout = round(price / 1.20, 2)
-                
-                time.sleep(6.5)
-                home_stats = get_team_stats(home_id)
-                time.sleep(6.5)
-                away_stats = get_team_stats(away_id)
-                
-                match_key = f"{home_team} vs {away_team}"
-                matches_dict[match_key] = {
-                    "teams": match_key,
-                    "home": home_team,
-                    "away": away_team,
-                    "time": formatted_time,
-                    "league": f"{league_name} ({country})",
-                    "odds": price,
-                    "target": target_cashout,
-                    "h_stats": home_stats,
-                    "a_stats": away_stats
-                }
-                count += 1
+                if is_valid_league(league_name):
+                    all_candidate_fixtures.append(item)
         except Exception as e:
-            print(f"Greška detalji: {e}")
+            print(f"Greška raspored {date_str}: {e}")
+            
+        time.sleep(6.5)
+
+    # Sortiramo kandidatske utakmice kronološki po vremenu početka
+    all_candidate_fixtures.sort(key=lambda x: x["fixture"]["timestamp"])
+    
+    print(f"Pronađeno {len(all_candidate_fixtures)} potencijalnih utakmica u 1. i 2. ligama. Provjeravam tečajeve...")
+    
+    # 2. Provjeravamo tečajeve i statistiku dok ne skupimo do 8 kvalitetnih mečeva
+    target_matches_count = 8
+    found_count = 0
+    
+    for item in all_candidate_fixtures:
+        if found_count >= target_matches_count:
+            break
+            
+        fix_id = item["fixture"]["id"]
+        league_name = item["league"]["name"]
+        country = item["league"]["country"]
+        home_team = item["teams"]["home"]["name"]
+        home_id = item["teams"]["home"]["id"]
+        away_team = item["teams"]["away"]["name"]
+        away_id = item["teams"]["away"]["id"]
+        
+        dt_utc = datetime.fromtimestamp(item["fixture"]["timestamp"], tz=timezone.utc)
+        local_dt = dt_utc + local_offset
+        formatted_time = local_dt.strftime("%d.%m. u %H:%M")
+        
+        # Dohvaćamo tečaj za ovu konkretnu utakmicu
+        odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?fixture={fix_id}"
+        found_price = None
+        
+        try:
+            res_odds = requests.get(odds_url, headers=headers).json()
+            for odd_item in res_odds.get("response", []):
+                for bm in odd_item.get("bookmakers", []):
+                    for bet in bm.get("bets", []):
+                        if str(bet["id"]) == "5" or bet["name"] == "Goals Over/Under":
+                            for val in bet["values"]:
+                                if val["value"] == "Over 2.5":
+                                    price = float(val["odd"])
+                                    if 1.60 <= price <= 1.85:
+                                        found_price = price
+                                        break
+                            if found_price: break
+                    if found_price: break
+                if found_price: break
+        except Exception as e:
+            print(f"Greška odds za fixture {fix_id}: {e}")
+            
+        time.sleep(6.5)
+        
+        # Ako tečaj odgovara, povlačimo statistiku
+        if found_price:
+            target_cashout = round(found_price / 1.20, 2)
+            
+            home_stats = get_team_stats(home_id)
+            time.sleep(6.5)
+            away_stats = get_team_stats(away_id)
+            time.sleep(6.5)
+            
+            match_key = f"{home_team} vs {away_team}"
+            matches_dict[match_key] = {
+                "teams": match_key,
+                "home": home_team,
+                "away": away_team,
+                "time": formatted_time,
+                "league": f"{league_name} ({country})",
+                "odds": found_price,
+                "target": target_cashout,
+                "h_stats": home_stats,
+                "a_stats": away_stats
+            }
+            found_count += 1
+            print(f"Pronađena utakmica #{found_count}: {match_key} (Tečaj: {found_price})")
 
 table_rows = ""
 if matches_dict:
@@ -231,8 +227,8 @@ html_content = f"""
 </head>
 <body>
     <div class="container">
-        <h1>Over 2.5 Verified Stats Dashboard (Top 10)</h1>
-        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe. (Prikazuju se samo natjecanja 1. i 2. ranga)</p>
+        <h1>Over 2.5 Verified Stats Dashboard</h1>
+        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe. (Isključivo natjecanja 1. i 2. ranga)</p>
         <table>
             <thead>
                 <tr>
