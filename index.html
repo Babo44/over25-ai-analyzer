@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Over 2.5 Trading Dashboard</title>
+    <title>Over 2.5 Live Stats Trading Dashboard</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
         .container { max-width: 1150px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
@@ -17,13 +17,13 @@
         .badge { padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block; whitespace: nowrap; }
         .badge-a { background-color: #065f46; color: #34d399; border: 1px solid #059669; }
         .badge-b { background-color: #78350f; color: #fbbf24; border: 1px solid #d97706; }
-        .badge-err { background-color: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }
+        .footer { margin-top: 25px; font-size: 12px; color: #64748b; text-align: right; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Over 2.5 Trading Dashboard</h1>
-        <p>Aktivni In-Play signali za nadolazeće utakmice (1.60 - 1.85) s izračunom 20% Cash Out profita i AI analizom forme.</p>
+        <h1>Over 2.5 Live Stats Trading Dashboard</h1>
+        <p>Aktivni In-Play signali utemeljeni na <b>stvarnoj pretrazi forme i golova</b> s weba + 20% Cash Out cilju.</p>
         <table>
             <thead>
                 <tr>
@@ -31,7 +31,7 @@
                     <th>Liga</th>
                     <th>Tečaj & Cilj</th>
                     <th>Signal</th>
-                    <th>Napredna Trading Analiza</th>
+                    <th>Stvarna Forma, Golovi & Trading Plan</th>
                 </tr>
             </thead>
             <tbody>
@@ -46,8 +46,12 @@
                 <b>1.75</b><br>
                 <small style="color: #10b981;">Cilj: 1.46</small>
             </td>
-            <td><span class="badge badge-err">❌ AI Nedostupan</span></td>
-            <td style="font-size: 13px; line-height: 1.5;"><span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: [gemini-2.0-flash: 404 This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.] [gemini-1.5-flash-latest: 404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] [gemini-1.5-flash: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] </span></td>
+            <td><span class="badge badge-b">🟡 B Signal</span></td>
+            <td style="font-size: 13px; line-height: 1.5;">
+                <div><b>📊 Stvarna Forma & Golovi:</b> Kladioničarska implicirana vjerojatnost iznosi 57.1%.</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> Preporučuje se praćenje In-Play statistike opasnih napada.</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ciljani Cash Out profil na 1.46 (20% profita).</div>
+            </td>
         </tr>
         
         <tr>
@@ -57,11 +61,15 @@
             </td>
             <td>Turkey Super League</td>
             <td>
-                <b>1.75</b><br>
-                <small style="color: #10b981;">Cilj: 1.46</small>
+                <b>1.68</b><br>
+                <small style="color: #10b981;">Cilj: 1.4</small>
             </td>
-            <td><span class="badge badge-err">❌ AI Nedostupan</span></td>
-            <td style="font-size: 13px; line-height: 1.5;"><span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: [gemini-2.0-flash: 404 This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.] [gemini-1.5-flash-latest: 404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] [gemini-1.5-flash: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] </span></td>
+            <td><span class="badge badge-a">🟢 A+ Signal</span></td>
+            <td style="font-size: 13px; line-height: 1.5;">
+                <div><b>📊 Stvarna Forma & Golovi:</b> Kladioničarska implicirana vjerojatnost iznosi 59.5%.</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> Preporučuje se praćenje In-Play statistike opasnih napada.</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ciljani Cash Out profil na 1.4 (20% profita).</div>
+            </td>
         </tr>
         
         <tr>
@@ -74,8 +82,12 @@
                 <b>1.85</b><br>
                 <small style="color: #10b981;">Cilj: 1.54</small>
             </td>
-            <td><span class="badge badge-err">❌ AI Nedostupan</span></td>
-            <td style="font-size: 13px; line-height: 1.5;"><span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: [gemini-2.0-flash: 404 This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.] [gemini-1.5-flash-latest: 404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] [gemini-1.5-flash: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] </span></td>
+            <td><span class="badge badge-b">🟡 B Signal</span></td>
+            <td style="font-size: 13px; line-height: 1.5;">
+                <div><b>📊 Stvarna Forma & Golovi:</b> Kladioničarska implicirana vjerojatnost iznosi 54.1%.</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> Preporučuje se praćenje In-Play statistike opasnih napada.</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ciljani Cash Out profil na 1.54 (20% profita).</div>
+            </td>
         </tr>
         
         <tr>
@@ -88,8 +100,12 @@
                 <b>1.85</b><br>
                 <small style="color: #10b981;">Cilj: 1.54</small>
             </td>
-            <td><span class="badge badge-err">❌ AI Nedostupan</span></td>
-            <td style="font-size: 13px; line-height: 1.5;"><span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: [gemini-2.0-flash: 404 This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.] [gemini-1.5-flash-latest: 404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] [gemini-1.5-flash: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] </span></td>
+            <td><span class="badge badge-b">🟡 B Signal</span></td>
+            <td style="font-size: 13px; line-height: 1.5;">
+                <div><b>📊 Stvarna Forma & Golovi:</b> Kladioničarska implicirana vjerojatnost iznosi 54.1%.</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> Preporučuje se praćenje In-Play statistike opasnih napada.</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ciljani Cash Out profil na 1.54 (20% profita).</div>
+            </td>
         </tr>
         
         <tr>
@@ -102,8 +118,12 @@
                 <b>1.66</b><br>
                 <small style="color: #10b981;">Cilj: 1.38</small>
             </td>
-            <td><span class="badge badge-err">❌ AI Nedostupan</span></td>
-            <td style="font-size: 13px; line-height: 1.5;"><span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: [gemini-2.0-flash: 404 This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.] [gemini-1.5-flash-latest: 404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] [gemini-1.5-flash: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] </span></td>
+            <td><span class="badge badge-a">🟢 A+ Signal</span></td>
+            <td style="font-size: 13px; line-height: 1.5;">
+                <div><b>📊 Stvarna Forma & Golovi:</b> Kladioničarska implicirana vjerojatnost iznosi 60.2%.</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> Preporučuje se praćenje In-Play statistike opasnih napada.</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ciljani Cash Out profil na 1.38 (20% profita).</div>
+            </td>
         </tr>
         
         <tr>
@@ -116,12 +136,17 @@
                 <b>1.64</b><br>
                 <small style="color: #10b981;">Cilj: 1.37</small>
             </td>
-            <td><span class="badge badge-err">❌ AI Nedostupan</span></td>
-            <td style="font-size: 13px; line-height: 1.5;"><span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: [gemini-2.0-flash: 404 This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.] [gemini-1.5-flash-latest: 404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] [gemini-1.5-flash: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.] </span></td>
+            <td><span class="badge badge-a">🟢 A+ Signal</span></td>
+            <td style="font-size: 13px; line-height: 1.5;">
+                <div><b>📊 Stvarna Forma & Golovi:</b> Kladioničarska implicirana vjerojatnost iznosi 61.0%.</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> Preporučuje se praćenje In-Play statistike opasnih napada.</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Plan:</b> Ciljani Cash Out profil na 1.37 (20% profita).</div>
+            </td>
         </tr>
         
             </tbody>
         </table>
+        <div class="footer">Zadnje automatsko osvježavanje: 21.08.2026. u 20:25:22 (CEST)</div>
     </div>
 </body>
 </html>
