@@ -12,7 +12,7 @@ matches_dict = {}
 now_utc = datetime.now(timezone.utc)
 local_offset = timedelta(hours=2) # CEST vremenska zona
 
-# 1. Povlačenje i filtriranje koeficijenata
+# 1. Povlačenje i filtriranje utakmica s Odds API-ja
 if ODDS_API_KEY:
     url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
     try:
@@ -29,7 +29,6 @@ if ODDS_API_KEY:
                     continue
                 
                 commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
-                
                 if commence_dt <= now_utc:
                     continue
                 
@@ -50,7 +49,6 @@ if ODDS_API_KEY:
                             for outcome in mkt.get("outcomes", []):
                                 if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
                                     price = outcome.get("price", 0)
-                                    
                                     if 1.60 <= price <= 1.85:
                                         target_cashout = round(price / 1.20, 2)
                                         matches_dict[match_key] = {
@@ -64,62 +62,84 @@ if ODDS_API_KEY:
     except Exception as e:
         print(f"Greška Odds API: {e}")
 
-# 2. Generiranje analize s ID-evima (Pouzdanije spajanje)
+# 2. AI Analiza s točnim ID mapiranjem i bez lažnog teksta
 ai_analyses = {}
+ai_error_log = ""
+
 if GEMINI_API_KEY and matches_dict:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         
-        match_prompt_lines = []
         id_to_key = {}
+        prompt_items = []
         for idx, (m_key, m_val) in enumerate(matches_dict.items(), 1):
-            match_id = f"ID_{idx}"
+            match_id = f"MATCH_{idx}"
             id_to_key[match_id] = m_key
-            match_prompt_lines.append(f"- {match_id}: {m_key} (Liga: {m_val['league']})")
+            prompt_items.append(f"- {match_id}: {m_key} (Liga: {m_val['league']})")
         
-        prompt_text = "\n".join(match_prompt_lines)
+        prompt_text = "\n".join(prompt_items)
         
         prompt = f"""
-        Analiziraj ove utakmice za Over 2.5 In-Play trading:
+        Ti si profesionalni nogometni trader. Analiziraj ove utakmice za Over 2.5 In-Play Cash Out trading:
         {prompt_text}
 
-        Za SVAKU utakmicu vrati analizu u JSON formatu gdje je KLJUČ točan ID (npr. "ID_1", "ID_2"):
+        Za SVAKU utakmicu daj KONKRETNU i STVARNU statistiku u sljedećem JSON formatu (ključ mora biti npr. "MATCH_1"):
         {{
-          "ID_1": {{
+          "MATCH_1": {{
              "signal": "🟢 A+ Signal" ili "🟡 B Signal",
-             "profil": "Prosjek golova i stil igre obje ekipe.",
-             "tempo_1h": "Statistika i opasnost za gol u 1. poluvremenu.",
-             "zakljucak": "Trgovački savjet za Cash Out."
+             "profil": "Daj točne brojke: Prosjek golova po utakmici za obje ekipe ove sezone i % prolaznosti Over 2.5 u zadnjih 5-10 utakmica.",
+             "tempo_1h": "Kada najčešće daju/primaju gol u 1. poluvremenu (% utakmica s golom u 1H).",
+             "zakljucak": "Preporuka u kojoj minuti izaći s Cash Outom ako padne rani gol."
           }}
         }}
-        Vrati isključivo čisti JSON.
+        Vrati ISKLJUČIVO valjani JSON tekst.
         """
         
-        model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
-        res = model.generate_content(prompt)
-        raw_json = json.loads(res.text)
+        models_to_try = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash']
         
-        # Preslikavanje ID-a natrag na pravi naziv utakmice
-        for m_id, a_data in raw_json.items():
-            if m_id in id_to_key:
-                ai_analyses[id_to_key[m_id]] = a_data
+        for m_name in models_to_try:
+            try:
+                model = genai.GenerativeModel(m_name, generation_config={"response_mime_type": "application/json"})
+                res = model.generate_content(prompt)
+                
+                json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
+                if json_match:
+                    parsed_json = json.loads(json_match.group(0))
+                    for match_id, analysis in parsed_json.items():
+                        if match_id in id_to_key:
+                            ai_analyses[id_to_key[match_id]] = analysis
+                    print(f"Uspjeh s modelom: {m_name}")
+                    break
+            except Exception as model_ex:
+                ai_error_log += f"[{m_name}: {model_ex}] "
                 
     except Exception as e:
-        print(f"AI greška: {e}")
+        ai_error_log = f"Konfiguracijska greška: {e}"
 
-# 3. Sklapanje HTML Tablice
+# 3. Izrada HTML-a
 table_rows = ""
 if matches_dict:
     for match_key, m in matches_dict.items():
-        analysis_data = ai_analyses.get(match_key, {})
+        analysis_data = ai_analyses.get(match_key)
         
-        signal = analysis_data.get("signal", "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal")
-        profil = analysis_data.get("profil", f"Statistički profil za {m['teams']} u ligi {m['league']}.")
-        tempo = analysis_data.get("tempo_1h", "Očekuje se rano otvaranje i pritisak u prvih 30 minuta.")
-        zakljucak = analysis_data.get("zakljucak", f"Ciljani Cash Out profil na {m['target']}.")
-        
-        signal_class = "badge-a" if "A+" in signal else "badge-b"
-        
+        if analysis_data:
+            signal = analysis_data.get("signal", "🟡 B Signal")
+            profil = analysis_data.get("profil", "Nema podataka.")
+            tempo = analysis_data.get("tempo_1h", "Nema podataka.")
+            zakljucak = analysis_data.get("zakljucak", "Nema podataka.")
+            signal_class = "badge-a" if "A+" in signal else "badge-b"
+            
+            analysis_html = f"""
+                <div><b>📊 Form i Golovi:</b> {profil}</div>
+                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> {tempo}</div>
+                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Trading Savjet:</b> {zakljucak}</div>
+            """
+        else:
+            # Ako AI ne proradi, ispisujemo stvarni error log
+            signal = "❌ AI Nedostupan"
+            signal_class = "badge-err"
+            analysis_html = f"<span style='color: #ef4444;'>AI nije uspio dohvatiti analizu. Log greške: {ai_error_log if ai_error_log else 'Prazan odgovor.'}</span>"
+
         table_rows += f"""
         <tr>
             <td>
@@ -132,15 +152,11 @@ if matches_dict:
                 <small style="color: #10b981;">Cilj: {m['target']}</small>
             </td>
             <td><span class="badge {signal_class}">{signal}</span></td>
-            <td style="font-size: 13px; line-height: 1.5;">
-                <div><b>📊 Profil & Golovi:</b> {profil}</div>
-                <div style="margin-top: 4px;"><b>⏱️ 1H Tempo:</b> {tempo}</div>
-                <div style="color: #38bdf8; margin-top: 4px;"><b>💡 Zaključak:</b> {zakljucak}</div>
-            </td>
+            <td style="font-size: 13px; line-height: 1.5;">{analysis_html}</td>
         </tr>
         """
 else:
-    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema nadolazećih mečeva koji zadovoljavaju trgovačke kriterije (1.60 - 1.85).</td></tr>"
+    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema nadolazećih mečeva u rasponu 1.60 - 1.85.</td></tr>"
 
 html_content = f"""
 <!DOCTYPE html>
@@ -161,12 +177,13 @@ html_content = f"""
         .badge {{ padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block; whitespace: nowrap; }}
         .badge-a {{ background-color: #065f46; color: #34d399; border: 1px solid #059669; }}
         .badge-b {{ background-color: #78350f; color: #fbbf24; border: 1px solid #d97706; }}
+        .badge-err {{ background-color: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }}
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Over 2.5 Trading Dashboard</h1>
-        <p>Aktivni In-Play signali za nadolazeće utakmice (1.60 - 1.85) s izračunom 20% Cash Out profita i AI analizom tempa 1. poluvremena.</p>
+        <p>Aktivni In-Play signali za nadolazeće utakmice (1.60 - 1.85) s izračunom 20% Cash Out profita i AI analizom forme.</p>
         <table>
             <thead>
                 <tr>
@@ -189,4 +206,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print("Dashboard uspješno kreiran!")
+print("Kraj izvršavanja skripte.")
