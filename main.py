@@ -7,7 +7,10 @@ RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 
 now_utc = datetime.now(timezone.utc)
 local_offset = timedelta(hours=2) # CEST
+
+# Datum za danas i sutra
 today_str = now_utc.strftime("%Y-%m-%d")
+tomorrow_str = (now_utc + timedelta(days=1)).strftime("%Y-%m-%d")
 
 headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -15,7 +18,6 @@ headers = {
 }
 
 def get_team_stats(team_id):
-    """Dohvaća zadnjih 5 završenih utakmica za tim s brzim osiguranjem od grešaka."""
     if not RAPIDAPI_KEY:
         return None
     try:
@@ -51,12 +53,12 @@ def get_team_stats(team_id):
 matches_dict = {}
 
 if RAPIDAPI_KEY:
-    print("Pretražujem koeficijente za Over 2.5...")
+    print("Pretražujem koeficijente za danas i sutra...")
     found_odds = {}
     
-    # Pretražujemo prve 2 stranice da uhvatimo dovoljno utakmica
-    for page in range(1, 3):
-        odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={today_str}&bet=5&page={page}"
+    # Skeniramo i današnji i sutrašnji datum
+    for date_str in [today_str, tomorrow_str]:
+        odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={date_str}&bet=5&page=1"
         try:
             res = requests.get(odds_url, headers=headers).json()
             for item in res.get("response", []):
@@ -64,6 +66,7 @@ if RAPIDAPI_KEY:
                 fixture_timestamp = item["fixture"]["timestamp"]
                 commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
                 
+                # Samo utakmice koje tek trebaju početi
                 if commence_dt <= now_utc:
                     continue
                     
@@ -85,21 +88,21 @@ if RAPIDAPI_KEY:
                         }
                         break 
         except Exception as e:
-            print(f"Greška odds (Stranica {page}): {e}")
+            print(f"Greška odds ({date_str}): {e}")
             
-        time.sleep(1) # Pauza između listanja stranica API-ja
+        time.sleep(1)
 
-    # Uzimamo TOP 10 utakmica koje sljedeće počinju
+    # Uzimamo TOP 10 utakmica koje sljedeće počinju (danas ili sutra)
     sorted_fixtures = sorted(found_odds.items(), key=lambda x: x[1]['timestamp'])
     selected_items = sorted_fixtures[:10]
     
     if selected_items:
-        print(f"Obrađujem {len(selected_items)} utakmica, ovo će potrajati oko 2.5 minute...")
+        print(f"Obrađujem top {len(selected_items)} najskorijih mečeva...")
         selected_ids = [str(item[0]) for item in selected_items]
         ids_str = "-".join(selected_ids)
         prices_map = {item[0]: item[1]["price"] for item in selected_items}
         
-        time.sleep(6.5) # Inicijalna pauza
+        time.sleep(6.5)
         
         fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?ids={ids_str}"
         try:
@@ -127,7 +130,7 @@ if RAPIDAPI_KEY:
                 price = prices_map[fix_id_int]
                 target_cashout = round(price / 1.20, 2)
                 
-                # Pauze od 6.5s čuvaju besplatni limit od max 10 zahtjeva u minuti
+                # Pauze za zaštitu limita
                 time.sleep(6.5)
                 home_stats = get_team_stats(home_id)
                 time.sleep(6.5)
@@ -216,7 +219,7 @@ html_content = f"""
 <body>
     <div class="container">
         <h1>Over 2.5 Verified Stats Dashboard (Top 10)</h1>
-        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe za 10 najbližih utakmica.</p>
+        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe za 10 najbližih nadolazećih mečeva (danas i sutra).</p>
         <table>
             <thead>
                 <tr>
