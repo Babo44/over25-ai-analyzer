@@ -1,1 +1,279 @@
-<div style='font-family:sans-serif; padding:20px;'><h2>Došlo je do greške u analizi:</h2><p style='color:red;'>Model gemini-1.5-flash greška: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.<br>Model gemini-1.5-pro greška: 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.<br>Model gemini-2.0-flash-exp greška: 404 models/gemini-2.0-flash-exp is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.</p></div>
+
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Over 2.5 Trading Analyzer</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
+        .container { max-width: 900px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        h1 { color: #38bdf8; margin-top: 0; font-size: 24px; }
+        p { color: #94a3b8; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #334155; }
+        th { background-color: #334155; color: #38bdf8; font-weight: 600; }
+        tr:hover { background-color: #273549; }
+        .badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 14px; }
+        .odds { background-color: #0284c7; color: white; }
+        .target { background-color: #16a34a; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Over 2.5 Trading Analyzer</h1>
+        <p>Filtrirane utakmice s početnim koeficijentom 1.60 - 1.85 i izračunatim ciljem za 20% profita (Cash Out).</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Utakmica</th>
+                    <th>Liga</th>
+                    <th>Početni Over 2.5</th>
+                    <th>Ciljani Cashout (20% profit)</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td><b>IK Sirius vs BK Hacken</b></td>
+            <td>Allsvenskan - Sweden</td>
+            <td><span class="badge odds">1.63</span></td>
+            <td><span class="badge target">1.36</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>IK Sirius vs BK Hacken</b></td>
+            <td>Allsvenskan - Sweden</td>
+            <td><span class="badge odds">1.63</span></td>
+            <td><span class="badge target">1.36</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>IK Sirius vs BK Hacken</b></td>
+            <td>Allsvenskan - Sweden</td>
+            <td><span class="badge odds">1.72</span></td>
+            <td><span class="badge target">1.43</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Aldosivi Mar del Plata vs Union Santa Fe</b></td>
+            <td>Primera División - Argentina</td>
+            <td><span class="badge odds">1.73</span></td>
+            <td><span class="badge target">1.44</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Aldosivi Mar del Plata vs Union Santa Fe</b></td>
+            <td>Primera División - Argentina</td>
+            <td><span class="badge odds">1.67</span></td>
+            <td><span class="badge target">1.39</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Al-Faisaly KSA FC vs Neom</b></td>
+            <td>Saudi Pro League</td>
+            <td><span class="badge odds">1.8</span></td>
+            <td><span class="badge target">1.5</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Al-Faisaly KSA FC vs Neom</b></td>
+            <td>Saudi Pro League</td>
+            <td><span class="badge odds">1.75</span></td>
+            <td><span class="badge target">1.46</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Al-Faisaly KSA FC vs Neom</b></td>
+            <td>Saudi Pro League</td>
+            <td><span class="badge odds">1.8</span></td>
+            <td><span class="badge target">1.5</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.68</span></td>
+            <td><span class="badge target">1.4</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.68</span></td>
+            <td><span class="badge target">1.4</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.66</span></td>
+            <td><span class="badge target">1.38</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.74</span></td>
+            <td><span class="badge target">1.45</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.73</span></td>
+            <td><span class="badge target">1.44</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.62</span></td>
+            <td><span class="badge target">1.35</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.7</span></td>
+            <td><span class="badge target">1.42</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.74</span></td>
+            <td><span class="badge target">1.45</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.79</span></td>
+            <td><span class="badge target">1.49</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.79</span></td>
+            <td><span class="badge target">1.49</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.79</span></td>
+            <td><span class="badge target">1.49</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>USL Dunkerque vs Montpellier</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.8</span></td>
+            <td><span class="badge target">1.5</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Pau FC vs Nancy</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.81</span></td>
+            <td><span class="badge target">1.51</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Pau FC vs Nancy</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.85</span></td>
+            <td><span class="badge target">1.54</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Pau FC vs Nancy</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.85</span></td>
+            <td><span class="badge target">1.54</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Pau FC vs Nancy</b></td>
+            <td>Ligue 2 - France</td>
+            <td><span class="badge odds">1.85</span></td>
+            <td><span class="badge target">1.54</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.75</span></td>
+            <td><span class="badge target">1.46</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.82</span></td>
+            <td><span class="badge target">1.52</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.85</span></td>
+            <td><span class="badge target">1.54</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.8</span></td>
+            <td><span class="badge target">1.5</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.82</span></td>
+            <td><span class="badge target">1.52</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.84</span></td>
+            <td><span class="badge target">1.53</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.81</span></td>
+            <td><span class="badge target">1.51</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.81</span></td>
+            <td><span class="badge target">1.51</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.79</span></td>
+            <td><span class="badge target">1.49</span></td>
+        </tr>
+        
+        <tr>
+            <td><b>Cracovia Kraków vs Wieczysta Kraków</b></td>
+            <td>Ekstraklasa - Poland</td>
+            <td><span class="badge odds">1.73</span></td>
+            <td><span class="badge target">1.44</span></td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
