@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 
 now_utc = datetime.now(timezone.utc)
-local_offset = timedelta(hours=2) # CEST vremenska zona
+local_offset = timedelta(hours=2) # CEST
 today_str = now_utc.strftime("%Y-%m-%d")
 
 headers = {
@@ -15,7 +15,7 @@ headers = {
 }
 
 def get_team_stats(team_id):
-    """Dohvaća zadnjih 5 završenih utakmica za određeni tim i računa prosjeke."""
+    """Dohvaća zadnjih 5 završenih utakmica za tim s brzim osiguranjem od grešaka."""
     if not RAPIDAPI_KEY:
         return None
     try:
@@ -45,31 +45,25 @@ def get_team_stats(team_id):
         pct = int((over_25_count / valid_games) * 100)
         return {"avg": avg_goals, "pct": pct}
     except Exception as e:
-        print(f"Greška pri povlačenju statistike za tim {team_id}: {e}")
+        print(f"Greška tim {team_id}: {e}")
         return None
 
 matches_dict = {}
 
 if RAPIDAPI_KEY:
-    print("Pretražujem današnje koeficijente za Over 2.5...")
+    print("Pretražujem koeficijente za Over 2.5...")
     found_odds = {}
-    page = 1
-    total_pages = 1
     
-    # 1. Pronalazak utakmica s Over 2.5 tečajem između 1.60 i 1.85 (max 3 stranice API-ja)
-    while page <= total_pages and page <= 3:
+    # Pretražujemo prve 2 stranice da uhvatimo dovoljno utakmica
+    for page in range(1, 3):
         odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={today_str}&bet=5&page={page}"
         try:
             res = requests.get(odds_url, headers=headers).json()
-            if "paging" in res:
-                total_pages = res["paging"]["total"]
-                
             for item in res.get("response", []):
                 fix_id = item["fixture"]["id"]
                 fixture_timestamp = item["fixture"]["timestamp"]
                 commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
                 
-                # Samo utakmice koje tek trebaju početi
                 if commence_dt <= now_utc:
                     continue
                     
@@ -85,39 +79,31 @@ if RAPIDAPI_KEY:
                                         break
                             break
                     if found_price:
-                        # Spremamo i cijenu i timestamp za kasnije sortiranje
                         found_odds[fix_id] = {
                             "price": found_price,
                             "timestamp": fixture_timestamp
                         }
                         break 
         except Exception as e:
-            print(f"Greška na odds API-ju: {e}")
-        
-        page += 1
+            print(f"Greška odds (Stranica {page}): {e}")
+            
+        time.sleep(1) # Pauza između listanja stranica API-ja
 
-    # SORTIRANJE: Sortiramo sve pronađene utakmice po vremenu početka (od prve sljedeće nadalje)
+    # Uzimamo TOP 10 utakmica koje sljedeće počinju
     sorted_fixtures = sorted(found_odds.items(), key=lambda x: x[1]['timestamp'])
-    
-    # UZIMAMO TOP 10 umjesto 5
     selected_items = sorted_fixtures[:10]
     
     if selected_items:
-        print(f"Pronađeno je mečeva. Obrađujem top {len(selected_items)} najskorijih...")
-        
-        # Izvlačimo samo ID-eve za upit
+        print(f"Obrađujem {len(selected_items)} utakmica, ovo će potrajati oko 2.5 minute...")
         selected_ids = [str(item[0]) for item in selected_items]
         ids_str = "-".join(selected_ids)
-        
-        # Mapa za lakše dohvaćanje cijena kasnije
         prices_map = {item[0]: item[1]["price"] for item in selected_items}
         
-        # 2. Dohvat detalja o ligama i imenima timova
+        time.sleep(6.5) # Inicijalna pauza
+        
         fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?ids={ids_str}"
         try:
             res = requests.get(fix_url, headers=headers).json()
-            
-            # Kako bismo zadržali kronološki redoslijed u tablici, iteriramo po originalnoj listi ID-eva
             response_items = {str(item["fixture"]["id"]): item for item in res.get("response", [])}
             
             for fix_id_str in selected_ids:
@@ -141,11 +127,11 @@ if RAPIDAPI_KEY:
                 price = prices_map[fix_id_int]
                 target_cashout = round(price / 1.20, 2)
                 
-                # 3. Povlačenje statistike (pauza štiti API od blokade zbog previše zahtjeva)
+                # Pauze od 6.5s čuvaju besplatni limit od max 10 zahtjeva u minuti
+                time.sleep(6.5)
                 home_stats = get_team_stats(home_id)
-                time.sleep(1) 
+                time.sleep(6.5)
                 away_stats = get_team_stats(away_id)
-                time.sleep(1)
                 
                 match_key = f"{home_team} vs {away_team}"
                 matches_dict[match_key] = {
@@ -160,9 +146,8 @@ if RAPIDAPI_KEY:
                     "a_stats": away_stats
                 }
         except Exception as e:
-            print(f"Greška kod dohvaćanja detalja: {e}")
+            print(f"Greška kod detalja: {e}")
 
-# Izrada HTML sučelja 
 table_rows = ""
 if matches_dict:
     for m in matches_dict.values():
@@ -184,7 +169,7 @@ if matches_dict:
         else:
             signal = "🟡 B Signal"
             signal_class = "badge-b"
-            stats_html = f"<div style='color:#cbd5e1;'>Nedovoljno povijesnih podataka za ovu ligu. Ciljani Cash Out je {m['target']}.</div>"
+            stats_html = f"<div style='color:#cbd5e1;'>Podaci o rezultatu trenutno nedostupni. Ciljani Cash Out je {m['target']}.</div>"
 
         table_rows += f"""
         <tr>
@@ -231,7 +216,7 @@ html_content = f"""
 <body>
     <div class="container">
         <h1>Over 2.5 Verified Stats Dashboard (Top 10)</h1>
-        <p>Prikaz <b>10 vremenski najskorijih</b> In-Play signala izračunatih iz stvarnih rezultata svake ekipe. (Podržane sve HNL i regionalne lige)</p>
+        <p>In-Play signali izračunati na temelju <b>stvarnih službenih rezultata</b> iz zadnjih 5 utakmica svake ekipe za 10 najbližih utakmica.</p>
         <table>
             <thead>
                 <tr>
@@ -239,7 +224,7 @@ html_content = f"""
                     <th style="width: 15%;">Liga</th>
                     <th style="width: 10%;">Tečaj & Cilj</th>
                     <th style="width: 10%;">Signal</th>
-                    <th style="width: 45%;">Provjereni Statistički Podaci</th>
+                    <th style="width: 45%;">Provjereni Statistički Podaci (API-Football)</th>
                 </tr>
             </thead>
             <tbody>
@@ -255,4 +240,4 @@ html_content = f"""
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_content)
 
-print("Podaci uspješno izračunati, skripta završena!")
+print("Podaci uspješno izračunati!")
