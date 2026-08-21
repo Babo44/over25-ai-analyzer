@@ -28,5 +28,9 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 ai_response = model.generate_content(prompt)
 
 # 3. Spremanje rezultata u index.html
+# Očišćavanje HTML koda od markdown oznaka
+html_code = ai_response.text.replace("```html", "").replace("```", "").strip()
+
+# Spremanje čistog HTML koda u index.html
 with open("index.html", "w", encoding="utf-8") as f:
-    f.write(ai_response.text)
+    f.write(html_code)
