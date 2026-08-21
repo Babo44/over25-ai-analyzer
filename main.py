@@ -2,35 +2,54 @@ import os
 import requests
 import google.generativeai as genai
 
-# Spajanje na API-je preko GitHub Secrets
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+if not ODDS_API_KEY or not GEMINI_API_KEY:
+    print("Greška: API ključevi nisu pronađeni u Secrets!")
+    exit(1)
+
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 1. Povlačenje utakmica s The-Odds-API (Pinnacle/Exchange koeficijenti)
-url = f"https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=h2h,totals"
-response = requests.get(url).json()
+# 1. Povlačenje utakmica
+try:
+    url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+    res = requests.get(url)
+    data = res.json()
+except Exception as e:
+    print(f"Greška pri dohvaćanju s Odds API-ja: {e}")
+    data = []
 
-# 2. Slanje podataka Gemini AI-ju za filtriranje
 prompt = f"""
-Ti si profesionalni analitičar za trading na sportskim kladionicama.
-Pregledaj ove utakmice: {response}
+Ti si analitičar za trading na sportskim kladionicama.
+Pregledaj ove utakmice: {data}
 
-Izdvoji SAMO one utakmice gdje je Over 2.5 koeficijent između 1.60 i 1.85, 
-i gdje timovi imaju visok potencijal za rani gol u prvih 15 minuta.
-Generiraj jednostavan HTML kod s tablicom u kojoj su navedeni:
-Utakmica, Liga, Početni koeficijent i Ciljani Cashout koeficijent za 20% profita.
-Vrati ISKLJUČIVO čisti HTML kod bez dodatih opisa.
+Izdvoji mečeve gdje je Over 2.5 koeficijent između 1.60 i 1.85.
+Generiraj moderan i čist HTML kod s tablicom (Stupci: Utakmica, Liga, Početni koeficijent, Ciljani Cashout za 20% profita).
+Ako nema odgovarajućih mečeva u ponudi, prikaži HTML poruku: "Trenutno nema mečeva s koeficijentom u rasponu 1.60 - 1.85."
+
+Vrati ISKLJUČIVO čisti HTML kod bez markdown oznaka.
 """
 
-model = genai.GenerativeModel('gemini-1.5-flash')
-ai_response = model.generate_content(prompt)
+# 2. Rotacija modela ako jedan vrati 404
+model_names = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash']
+html_code = ""
 
-# 3. Spremanje rezultata u index.html
-# Očišćavanje HTML koda od markdown oznaka
-html_code = ai_response.text.replace("```html", "").replace("```", "").strip()
+for name in model_names:
+    try:
+        model = genai.GenerativeModel(name)
+        response = model.generate_content(prompt)
+        html_code = response.text.replace("```html", "").replace("```", "").strip()
+        print(f"Uspješno iskorišten model: {name}")
+        break
+    except Exception as e:
+        print(f"Model {name} nije uspio: {e}")
 
-# Spremanje čistog HTML koda u index.html
+if not html_code:
+    html_code = "<h2>Greška u generiranju analize. Provjerite API postavke.</h2>"
+
+# 3. Spremanje u datoteku
 with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_code)
+
+print("index.html je uspješno kreiran!")
