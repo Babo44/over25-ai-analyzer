@@ -114,63 +114,66 @@ if ODDS_API_KEY:
     except Exception as e:
         print(f"Greška Odds API: {e}")
 
-# 3. Generiranje AI analize preko Gemini modela
+# 3. Generiranje AI analize preko provjerenih Gemini modela
 ai_analyses = {}
 
 if GEMINI_API_KEY and matches_dict and not api_limit_exceeded:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         
-        active_model_name = None
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                active_model_name = m.name
-                break
+        id_to_key = {}
+        prompt_items = []
+        for idx, (m_key, m_val) in enumerate(matches_dict.items(), 1):
+            match_id = f"M_{idx}"
+            id_to_key[match_id] = m_key
+            prompt_items.append(f"{match_id}: {m_val['home']} vs {m_val['away']} (Liga: {m_val['league']})")
         
-        if active_model_name:
-            id_to_key = {}
-            prompt_items = []
-            for idx, (m_key, m_val) in enumerate(matches_dict.items(), 1):
-                match_id = f"M_{idx}"
-                id_to_key[match_id] = m_key
-                prompt_items.append(f"{match_id}: {m_val['home']} vs {m_val['away']} (Liga: {m_val['league']})")
-            
-            prompt_text = "\n".join(prompt_items)
-            
-            prompt = f"""
-            Ti si profesionalni kladioničarski analitičar. Napiši bogatu i detaljnu analizu forme i golova za sljedeće parove:
-            {prompt_text}
+        prompt_text = "\n".join(prompt_items)
+        
+        prompt = f"""
+        Ti si profesionalni kladioničarski analitičar. Napiši bogatu i detaljnu analizu forme i golova za sljedeće parove:
+        {prompt_text}
 
-            Za SVAKI par vrati ODGOVOR ISKLJUČIVO u valjanom JSON formatu s ključevima M_1, M_2 itd.:
-            {{
-              "M_1": {{
-                 "signal": "🟢 A+ Signal" (ako su jake šanse za golove) ili "🟡 B Signal",
-                 "forma_i_golovi": "Kratak opis forme obje ekipe u zadnjih 5 mečeva, prosjek golova i % Over 2.5.",
-                 "tempo_1h": "Procjena prolaznosti Over 0.5 HT i tempa u 1. poluvremenu.",
-                 "zakljucak": "Trgovačka preporuka za In-Play ulazak i Cash Out."
-              }}
-            }}
-            """
-            
-            model = genai.GenerativeModel(active_model_name)
-            res = model.generate_content(prompt)
-            
-            json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
-            if json_match:
-                parsed_json = json.loads(json_match.group(0))
-                for match_id, analysis in parsed_json.items():
-                    if match_id in id_to_key:
-                        ai_analyses[id_to_key[match_id]] = analysis
+        Za SVAKI par vrati ODGOVOR ISKLJUČIVO u valjanom JSON formatu s ključevima M_1, M_2 itd.:
+        {{
+          "M_1": {{
+             "signal": "🟢 A+ Signal" (ako su jake šanse za golove) ili "🟡 B Signal",
+             "forma_i_golovi": "Kratak opis forme obje ekipe u zadnjih 5 mečeva, prosjek golova i % Over 2.5.",
+             "tempo_1h": "Procjena prolaznosti Over 0.5 HT i tempa u 1. poluvremenu.",
+             "zakljucak": "Trgovačka preporuka za In-Play ulazak i Cash Out."
+          }}
+        }}
+        """
+        
+        # Lista provjerenih stabilnih modela
+        candidate_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"]
+        
+        for model_name in candidate_models:
+            try:
+                model = genai.GenerativeModel(model_name)
+                res = model.generate_content(prompt)
+                
+                json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
+                if json_match:
+                    parsed_json = json.loads(json_match.group(0))
+                    for match_id, analysis in parsed_json.items():
+                        if match_id in id_to_key:
+                            ai_analyses[id_to_key[match_id]] = analysis
+                    print(f"Uspješno generirano preko AI modela: {model_name}")
+                    break
+            except Exception as mod_err:
+                print(f"Model {model_name} nije uspio: {mod_err}")
+                
     except Exception as e:
         print(f"AI greška: {e}")
 
-# 4. Prikaz HTML Tablice s detekcijom greške
+# 4. Prikaz HTML Tablice s točnim otpakiravanjem .items()
 table_rows = ""
 
 if api_limit_exceeded:
     table_rows = "<tr><td colspan='5' style='text-align:center; color: #ef4444; font-weight: bold; padding: 20px;'>⚠️ PREKORAČEN JE BESPLATNI MJESEČNI LIMIT NA ODDS API-JU (Quota Exceeded). Promijeni API ključ ili pričekaj obnovu kredita.</td></tr>"
 elif matches_dict:
-    for match_key, m in matches_dict.values():
+    for match_key, m in matches_dict.items():
         analysis_data = ai_analyses.get(match_key)
         
         if analysis_data:
