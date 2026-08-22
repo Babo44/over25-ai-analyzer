@@ -15,7 +15,6 @@ local_now = now_utc + local_offset
 local_today = local_now.date()
 update_timestamp = local_now.strftime("%d.%m.%Y. u %H:%M:%S")
 
-# Definicija isključivo Top UEFA liga i najviših rangova (1. i 2. lige, europska natjecanja)
 TARGET_LEAGUES = [
     "soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league",
     "soccer_epl", "soccer_efl_champ", 
@@ -32,7 +31,6 @@ TARGET_LEAGUES = [
 
 if ODDS_API_KEY:
     try:
-        # 1. Povuci sve dostupne sportove kako ne bi gađali lige koje su na pauzi (štedi API pozive)
         sports_res = requests.get(f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}")
         active_sports = []
         if sports_res.status_code == 200:
@@ -40,13 +38,11 @@ if ODDS_API_KEY:
                 if s.get("key") in TARGET_LEAGUES:
                     active_sports.append(s.get("key"))
         else:
-            active_sports = TARGET_LEAGUES # Fallback ako prvi poziv ne uspije
+            active_sports = TARGET_LEAGUES
 
         raw_matches = []
         
-        # 2. Iteriraj samo kroz aktivne Top UEFA lige
         for league_key in active_sports:
-            # Ako smo već skupili 15 utakmica za danas, zaustavi trošenje API limita
             if len(raw_matches) >= 15:
                 break
                 
@@ -64,7 +60,6 @@ if ODDS_API_KEY:
                         commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
                         local_commence_dt = commence_dt + local_offset
                         
-                        # STROGI FILTAR DATUMA: Samo današnji mečevi koji još nisu počeli
                         if commence_dt <= now_utc or local_commence_dt.date() != local_today:
                             continue
                         
@@ -81,16 +76,17 @@ if ODDS_API_KEY:
                                     for outcome in mkt.get("outcomes", []):
                                         if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
                                             price = outcome.get("price", 0)
-                                            # Strogi filtar tečaja
                                             if 1.60 <= price <= 1.85:
                                                 found_price = price
                                                 break
-                                    if found_price: break
+                                        if found_price: break
+                                if found_price: break
                             if found_price: break
                         
                         if found_price:
                             raw_matches.append({
                                 "key": match_key,
+                                "teams": match_key,
                                 "home": home,
                                 "away": away,
                                 "time": formatted_time,
@@ -100,7 +96,6 @@ if ODDS_API_KEY:
                                 "timestamp": commence_dt.timestamp()
                             })
 
-        # Sortiranje utakmica kronološki i uzimanje prvih 10
         raw_matches.sort(key=lambda x: x["timestamp"])
         for m in raw_matches[:10]:
             matches_dict[m["key"]] = m
@@ -108,56 +103,61 @@ if ODDS_API_KEY:
     except Exception as e:
         print(f"Odds API Greška: {e}")
 
-# AI Analiza
 ai_analyses = {}
 if GEMINI_API_KEY and matches_dict:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
         
-        prompt_items = []
-        id_to_key = {}
-        for idx, (m_key, m_val) in enumerate(matches_dict.items(), 1):
-            match_id = f"M_{idx}"
-            id_to_key[match_id] = m_key
-            prompt_items.append(f"{match_id}: {m_val['home']} vs {m_val['away']} (Liga: {m_val['league']})")
+        # Dinamički pronalazak prvog aktivnog modela
+        active_model_name = None
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                active_model_name = m.name
+                break
         
-        prompt_text = "\n".join(prompt_items)
-        
-        prompt = f"""
-        Kao stručni nogometni analitičar, analiziraj ove utakmice za klađenje na zbroj golova (Over 2.5). Želim specifične podatke.
-        Utakmice:
-        {prompt_text}
+        if active_model_name:
+            prompt_items = []
+            id_to_key = {}
+            for idx, (m_key, m_val) in enumerate(matches_dict.items(), 1):
+                match_id = f"M_{idx}"
+                id_to_key[match_id] = m_key
+                prompt_items.append(f"{match_id}: {m_val['home']} vs {m_val['away']} (Liga: {m_val['league']})")
+            
+            prompt_text = "\n".join(prompt_items)
+            
+            prompt = f"""
+            Kao stručni nogometni analitičar, analiziraj ove utakmice za klađenje na zbroj golova (Over 2.5). Želim specifične podatke.
+            Utakmice:
+            {prompt_text}
 
-        Vrati ODGOVOR ISKLJUČIVO u JSON formatu s ključevima M_1, M_2 itd. Ne stavljaj nikakav tekst prije ni poslije.
-        {{
-          "M_1": {{
-             "signal": "🟢 A+ Signal",
-             "forma_i_golovi": "Kratka rečenica o ofenzivnoj formi domaćina i obrambenoj propusnosti gosta u zadnjih 5 utakmica.",
-             "tempo_1h": "Procjena tempa u 1. poluvremenu (npr. 'Očekuje se brzi gol zbog visokog pritiska domaćina').",
-             "zakljucak": "Konkretan savjet za Cash Out."
-          }}
-        }}
-        """
-        
-        res = model.generate_content(prompt)
-        raw_text = res.text.strip()
-        
-        # Čišćenje Markdown oznaka iz odgovora kako JSON.loads ne bi pukao
-        raw_text = re.sub(r'^```json\s*', '', raw_text)
-        raw_text = re.sub(r'^```\s*', '', raw_text)
-        raw_text = re.sub(r'\s*```$', '', raw_text)
-        
-        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-        if json_match:
-            parsed_json = json.loads(json_match.group(0))
-            for match_id, analysis in parsed_json.items():
-                if match_id in id_to_key:
-                    ai_analyses[id_to_key[match_id]] = analysis
+            Vrati ODGOVOR ISKLJUČIVO u JSON formatu s ključevima M_1, M_2 itd. Ne stavljaj nikakav tekst prije ni poslije.
+            {{
+              "M_1": {{
+                 "signal": "🟢 A+ Signal",
+                 "forma_i_golovi": "Kratka rečenica o ofenzivnoj formi domaćina i obrambenoj propusnosti gosta u zadnjih 5 utakmica.",
+                 "tempo_1h": "Procjena tempa u 1. poluvremenu (npr. 'Očekuje se brzi gol zbog visokog pritiska domaćina').",
+                 "zakljucak": "Konkretan savjet za Cash Out."
+              }}
+            }}
+            """
+            
+            model = genai.GenerativeModel(active_model_name)
+            res = model.generate_content(prompt)
+            raw_text = res.text.strip()
+            
+            raw_text = re.sub(r'^```json\s*', '', raw_text)
+            raw_text = re.sub(r'^```\s*', '', raw_text)
+            raw_text = re.sub(r'\s*```$', '', raw_text)
+            
+            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+            if json_match:
+                parsed_json = json.loads(json_match.group(0))
+                for match_id, analysis in parsed_json.items():
+                    if match_id in id_to_key:
+                        ai_analyses[id_to_key[match_id]] = analysis
     except Exception as e:
         print(f"AI Greška: {e}")
 
-# Generiranje HTML-a
 table_rows = ""
 if matches_dict:
     for match_key, m in matches_dict.items():
