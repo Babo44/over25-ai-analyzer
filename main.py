@@ -11,61 +11,113 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 matches_dict = {}
 now_utc = datetime.now(timezone.utc)
 local_offset = timedelta(hours=2) # CEST
+local_now = now_utc + local_offset
+local_today = local_now.date()
+
+api_limit_exceeded = False
 
 if ODDS_API_KEY:
-    url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
     try:
-        res = requests.get(url)
-        data = res.json()
+        # 1. Provjera aktivnih nogometnih liga i stanja limita
+        sports_url = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
+        sports_req = requests.get(sports_url)
         
-        if isinstance(data, list):
-            for match in data:
-                if not match.get("sport_key", "").startswith("soccer"):
-                    continue
-                
-                commence_str = match.get("commence_time")
-                if not commence_str:
-                    continue
-                
-                commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
-                if commence_dt <= now_utc:
-                    continue
-                
-                local_dt = commence_dt + local_offset
-                formatted_time = local_dt.strftime("%d.%m. u %H:%M")
+        if sports_req.status_code in [401, 429]:
+            api_limit_exceeded = True
+        else:
+            sports_res = sports_req.json()
+            if isinstance(sports_res, dict) and "message" in sports_res:
+                msg_lower = sports_res["message"].lower()
+                if any(kw in msg_lower for kw in ["limit", "exceeded", "quota", "key"]):
+                    api_limit_exceeded = True
+
+            soccer_keys = []
+            if isinstance(sports_res, list):
+                for s in sports_res:
+                    if s.get("active") and (s.get("group") == "Soccer" or s.get("key", "").startswith("soccer")):
+                        soccer_keys.append(s.get("key"))
+            
+            if not soccer_keys and not api_limit_exceeded:
+                soccer_keys = [
+                    "soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga",
+                    "soccer_italy_serie_a", "soccer_france_ligue_one", "soccer_netherlands_eredivisie",
+                    "soccer_portugal_primeira_liga", "soccer_turkey_super_league", "soccer_poland_ekstraklasa",
+                    "soccer_belgium_first_div", "soccer_germany_bundesliga2", "soccer_spain_segunda_division"
+                ]
+
+            raw_matches = []
+
+            # 2. Pretražujemo lige i provjeravamo limit za svaki poziv
+            if not api_limit_exceeded:
+                for s_key in soccer_keys:
+                    odds_url = f"https://api.the-odds-api.com/v4/sports/{s_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+                    odds_req = requests.get(odds_url)
                     
-                home = match.get("home_team", "")
-                away = match.get("away_team", "")
-                league = match.get("sport_title", "Nogomet")
-                match_key = f"{home} vs {away}"
-                
-                if match_key in matches_dict:
-                    continue
-                
-                for bm in match.get("bookmakers", []):
-                    for mkt in bm.get("markets", []):
-                        if mkt.get("key") == "totals":
-                            for outcome in mkt.get("outcomes", []):
-                                if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
-                                    price = outcome.get("price", 0)
-                                    if 1.60 <= price <= 1.85:
-                                        target_cashout = round(price / 1.20, 2)
-                                        matches_dict[match_key] = {
-                                            "teams": match_key,
-                                            "home": home,
-                                            "away": away,
-                                            "time": formatted_time,
-                                            "league": league,
-                                            "odds": price,
-                                            "target": target_cashout
-                                        }
-                                        break
+                    if odds_req.status_code in [401, 429]:
+                        api_limit_exceeded = True
+                        break
+                        
+                    res = odds_req.json()
+                    if isinstance(res, dict) and "message" in res:
+                        msg_lower = res["message"].lower()
+                        if any(kw in msg_lower for kw in ["limit", "exceeded", "quota"]):
+                            api_limit_exceeded = True
+                            break
+
+                    if isinstance(res, list):
+                        for match in res:
+                            commence_str = match.get("commence_time")
+                            if not commence_str:
+                                continue
+                            
+                            commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
+                            local_commence_dt = commence_dt + local_offset
+                            
+                            if commence_dt <= now_utc or local_commence_dt.date() != local_today:
+                                continue
+                            
+                            formatted_time = local_commence_dt.strftime("%d.%m. u %H:%M")
+                            home = match.get("home_team", "")
+                            away = match.get("away_team", "")
+                            league = match.get("sport_title", "Nogomet")
+                            match_key = f"{home} vs {away}"
+                            
+                            found_price = None
+                            for bm in match.get("bookmakers", []):
+                                for mkt in bm.get("markets", []):
+                                    if mkt.get("key") == "totals":
+                                        for outcome in mkt.get("outcomes", []):
+                                            if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
+                                                price = outcome.get("price", 0)
+                                                if 1.60 <= price <= 1.85:
+                                                    found_price = price
+                                                    break
+                                        if found_price: break
+                                if found_price: break
+                            
+                            if found_price:
+                                raw_matches.append({
+                                    "key": match_key,
+                                    "home": home,
+                                    "away": away,
+                                    "time": formatted_time,
+                                    "league": league,
+                                    "odds": found_price,
+                                    "target": round(found_price / 1.20, 2),
+                                    "timestamp": commence_dt.timestamp()
+                                })
+
+                raw_matches.sort(key=lambda x: x["timestamp"])
+                for m in raw_matches[:10]:
+                    matches_dict[m["key"]] = m
+
     except Exception as e:
         print(f"Greška Odds API: {e}")
 
+# 3. Generiranje AI analize preko Gemini modela
 ai_analyses = {}
 
-if GEMINI_API_KEY and matches_dict:
+if GEMINI_API_KEY and matches_dict and not api_limit_exceeded:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         
@@ -112,9 +164,13 @@ if GEMINI_API_KEY and matches_dict:
     except Exception as e:
         print(f"AI greška: {e}")
 
+# 4. Prikaz HTML Tablice s detekcijom greške
 table_rows = ""
-if matches_dict:
-    for match_key, m in matches_dict.items():
+
+if api_limit_exceeded:
+    table_rows = "<tr><td colspan='5' style='text-align:center; color: #ef4444; font-weight: bold; padding: 20px;'>⚠️ PREKORAČEN JE BESPLATNI MJESEČNI LIMIT NA ODDS API-JU (Quota Exceeded). Promijeni API ključ ili pričekaj obnovu kredita.</td></tr>"
+elif matches_dict:
+    for match_key, m in matches_dict.values():
         analysis_data = ai_analyses.get(match_key)
         
         if analysis_data:
@@ -134,7 +190,7 @@ if matches_dict:
         table_rows += f"""
         <tr>
             <td>
-                <b>{m['teams']}</b><br>
+                <b>{m['home']} vs {m['away']}</b><br>
                 <small style="color: #94a3b8;">{m['time']}</small>
             </td>
             <td>{m['league']}</td>
@@ -151,9 +207,9 @@ if matches_dict:
         </tr>
         """
 else:
-    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema nadolazećih mečeva u rasponu 1.60 - 1.85.</td></tr>"
+    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema nadolazećih današnjih mečeva u rasponu 1.60 - 1.85.</td></tr>"
 
-update_timestamp = (datetime.now(timezone.utc) + local_offset).strftime("%d.%m.%Y. u %H:%M:%S")
+update_timestamp = local_now.strftime("%d.%m.%Y. u %H:%M:%S")
 
 html_content = f"""
 <!DOCTYPE html>
@@ -179,8 +235,8 @@ html_content = f"""
 </head>
 <body>
     <div class="container">
-        <h1>Over 2.5 Trading Dashboard</h1>
-        <p>Aktivni In-Play signali za nadolazeće utakmice (1.60 - 1.85) s izračunom 20% Cash Out profita i AI analizom forme.</p>
+        <h1>Over 2.5 Trading Dashboard (Danas)</h1>
+        <p>Današnji aktivni In-Play signali (1.60 - 1.85) poređani kronološki s izračunom 20% Cash Out profita i AI analizom forme.</p>
         <table>
             <thead>
                 <tr>
