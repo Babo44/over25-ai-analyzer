@@ -2,166 +2,75 @@ import os
 import json
 import re
 import requests
-import time
 from datetime import datetime, timezone, timedelta
 import google.generativeai as genai
 
-RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+matches_dict = {}
 now_utc = datetime.now(timezone.utc)
 local_offset = timedelta(hours=2) # CEST
-today_str = now_utc.strftime("%Y-%m-%d")
-tomorrow_str = (now_utc + timedelta(days=1)).strftime("%Y-%m-%d")
 
-headers = {
-    "X-RapidAPI-Key": RAPIDAPI_KEY,
-    "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
-}
-
-EXCLUDE_LEAGUES = ["u19", "u21", "u20", "u23", "reserve", "oberliga", "amateur", "youth", "women", "žene"]
-
-def is_valid_league(league_name):
-    name_lower = league_name.lower()
-    return not any(ex in name_lower for ex in EXCLUDE_LEAGUES)
-
-def get_team_stats(team_id):
-    if not RAPIDAPI_KEY:
-        return None
+# 1. Povlačenje ponude preko The-Odds-API (1 brzi poziv bez blokada)
+if ODDS_API_KEY:
+    url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
     try:
-        url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?team={team_id}&last=5"
-        res = requests.get(url, headers=headers).json()
-        fixtures = res.get("response", [])
-        if not fixtures: return None
+        res = requests.get(url)
+        data = res.json()
         
-        total_goals = 0
-        over_25_count = 0
-        valid_games = 0
-        for f in fixtures:
-            hg = f["goals"]["home"]
-            ag = f["goals"]["away"]
-            if hg is not None and ag is not None:
-                match_goals = hg + ag
-                total_goals += match_goals
-                if match_goals > 2.5: over_25_count += 1
-                valid_games += 1
-        if valid_games == 0: return None
-        return {
-            "avg": round(total_goals / valid_games, 2),
-            "pct": int((over_25_count / valid_games) * 100)
-        }
-    except Exception as e:
-        print(f"Greška stat: {e}")
-        return None
-
-matches_dict = {}
-
-# 1. Povlačenje ponude s API-Football (s pauzama od 14s)
-if RAPIDAPI_KEY:
-    print("Dohvaćam ponudu (pauze 14s za potpunu sigurnost)...")
-    found_odds = {}
-    
-    for date_str in [today_str, tomorrow_str]:
-        if len(found_odds) >= 15:
-            break
-        for page in range(1, 4):
-            if len(found_odds) >= 15:
-                break
-            odds_url = f"https://api-football-v1.p.rapidapi.com/v3/odds?date={date_str}&bet=5&page={page}"
-            try:
-                res = requests.get(odds_url, headers=headers).json()
-                for item in res.get("response", []):
-                    fix_id = item["fixture"]["id"]
-                    fixture_timestamp = item["fixture"]["timestamp"]
-                    commence_dt = datetime.fromtimestamp(fixture_timestamp, tz=timezone.utc)
-                    
-                    if commence_dt <= now_utc:
-                        continue
-                        
-                    league_name = item.get("league", {}).get("name", "")
-                    if not is_valid_league(league_name):
-                        continue
-                        
-                    found_price = None
-                    for bm in item.get("bookmakers", []):
-                        for bet in bm.get("bets", []):
-                            if str(bet["id"]) == "5" or bet["name"] == "Goals Over/Under":
-                                for val in bet["values"]:
-                                    if val["value"] == "Over 2.5":
-                                        price = float(val["odd"])
-                                        if 1.60 <= price <= 1.85:
-                                            found_price = price
-                                            break
-                                if found_price: break
-                        if found_price:
-                            found_odds[fix_id] = {
-                                "price": found_price,
-                                "timestamp": fixture_timestamp,
-                                "league": league_name,
-                                "country": item.get("league", {}).get("country", "")
-                            }
-                            break
-            except Exception as e:
-                print(f"Greška odds: {e}")
-            
-            time.sleep(14)
-
-    # Sortiranje i odabir top 10
-    sorted_fixtures = sorted(found_odds.items(), key=lambda x: x[1]['timestamp'])
-    selected_items = sorted_fixtures[:10]
-    
-    if selected_items:
-        selected_ids = [str(item[0]) for item in selected_items]
-        ids_str = "-".join(selected_ids)
-        
-        time.sleep(14)
-        fix_url = f"https://api-football-v1.p.rapidapi.com/v3/fixtures?ids={ids_str}"
-        try:
-            res = requests.get(fix_url, headers=headers).json()
-            response_items = {str(item["fixture"]["id"]): item for item in res.get("response", [])}
-            
-            for fix_id_str in selected_ids:
-                if fix_id_str not in response_items:
+        if isinstance(data, list):
+            for match in data:
+                if not match.get("sport_key", "").startswith("soccer"):
                     continue
-                item = response_items[fix_id_str]
-                fix_id_int = int(fix_id_str)
-                info = found_odds[fix_id_int]
                 
-                dt_utc = datetime.fromtimestamp(item["fixture"]["timestamp"], tz=timezone.utc)
-                local_dt = dt_utc + local_offset
+                commence_str = match.get("commence_time")
+                if not commence_str:
+                    continue
+                
+                commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
+                if commence_dt <= now_utc:
+                    continue
+                
+                local_dt = commence_dt + local_offset
                 formatted_time = local_dt.strftime("%d.%m. u %H:%M")
+                    
+                home = match.get("home_team", "")
+                away = match.get("away_team", "")
+                league = match.get("sport_title", "Nogomet")
+                match_key = f"{home} vs {away}"
                 
-                home_team = item["teams"]["home"]["name"]
-                home_id = item["teams"]["home"]["id"]
-                away_team = item["teams"]["away"]["name"]
-                away_id = item["teams"]["away"]["id"]
-                price = info["price"]
+                if match_key in matches_dict:
+                    continue
                 
-                time.sleep(14)
-                home_stats = get_team_stats(home_id)
-                time.sleep(14)
-                away_stats = get_team_stats(away_id)
-                
-                match_key = f"{home_team} vs {away_team}"
-                matches_dict[match_key] = {
-                    "teams": match_key,
-                    "home": home_team,
-                    "away": away_team,
-                    "time": formatted_time,
-                    "league": f"{info['league']} ({info['country']})",
-                    "odds": price,
-                    "target": round(price / 1.20, 2),
-                    "h_stats": home_stats,
-                    "a_stats": away_stats
-                }
-        except Exception as e:
-            print(f"Greška detalji: {e}")
+                for bm in match.get("bookmakers", []):
+                    for mkt in bm.get("markets", []):
+                        if mkt.get("key") == "totals":
+                            for outcome in mkt.get("outcomes", []):
+                                if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
+                                    price = outcome.get("price", 0)
+                                    if 1.60 <= price <= 1.85:
+                                        target_cashout = round(price / 1.20, 2)
+                                        matches_dict[match_key] = {
+                                            "teams": match_key,
+                                            "home": home,
+                                            "away": away,
+                                            "time": formatted_time,
+                                            "league": league,
+                                            "odds": price,
+                                            "target": target_cashout
+                                        }
+                                        break
+    except Exception as e:
+        print(f"Greška Odds API: {e}")
 
-# 2. Gemini AI Analiza
+# 2. Generiranje bogate analize preko Gemini AI
 ai_analyses = {}
+
 if GEMINI_API_KEY and matches_dict:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
+        
         active_model_name = None
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
@@ -174,29 +83,28 @@ if GEMINI_API_KEY and matches_dict:
             for idx, (m_key, m_val) in enumerate(matches_dict.items(), 1):
                 match_id = f"M_{idx}"
                 id_to_key[match_id] = m_key
-                h_st = m_val["h_stats"]
-                a_st = m_val["a_stats"]
-                st_info = f" [Statistika: {m_val['home']} avg {h_st['avg'] if h_st else 'N/A'}, {m_val['away']} avg {a_st['avg'] if a_st else 'N/A'}]" if h_st else ""
-                prompt_items.append(f"{match_id}: {m_val['home']} vs {m_val['away']} (Liga: {m_val['league']}){st_info}")
+                prompt_items.append(f"{match_id}: {m_val['home']} vs {m_val['away']} (Liga: {m_val['league']})")
             
             prompt_text = "\n".join(prompt_items)
+            
             prompt = f"""
-            Ti si profesionalni kladioničarski analitičar. Napiši bogatu analizu forme i 1H tempa za parove:
+            Ti si profesionalni kladioničarski analitičar. Napiši bogatu i detaljnu analizu forme i golova za sljedeće parove:
             {prompt_text}
 
             Za SVAKI par vrati ODGOVOR ISKLJUČIVO u valjanom JSON formatu s ključevima M_1, M_2 itd.:
             {{
               "M_1": {{
-                 "signal": "🟢 A+ Signal" ili "🟡 B Signal",
-                 "forma_i_golovi": "Kratak detaljan opis forme obje ekipe u zadnjih 5 mečeva, prosjek golova i % Over 2.5.",
-                 "tempo_1h": "Procjena 1. poluvremena i Over 0.5 HT prolaza u %.",
-                 "zakljucak": "Trgovačka preporuka za In-Play i Cash Out."
+                 "signal": "🟢 A+ Signal" (ako su jake šanse za golove) ili "🟡 B Signal",
+                 "forma_i_golovi": "Kratak opis forme obje ekipe u zadnjih 5 mečeva, prosjek golova i % Over 2.5.",
+                 "tempo_1h": "Procjena prolaznosti Over 0.5 HT i tempa u 1. poluvremenu.",
+                 "zakljucak": "Trgovačka preporuka za In-Play ulazak i Cash Out."
               }}
             }}
             """
             
             model = genai.GenerativeModel(active_model_name)
             res = model.generate_content(prompt)
+            
             json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
             if json_match:
                 parsed_json = json.loads(json_match.group(0))
@@ -206,7 +114,7 @@ if GEMINI_API_KEY and matches_dict:
     except Exception as e:
         print(f"AI greška: {e}")
 
-# 3. HTML Izrada
+# 3. Prikaz HTML Tablice (Identatično slici iz 20:38)
 table_rows = ""
 if matches_dict:
     for match_key, m in matches_dict.items():
@@ -214,17 +122,13 @@ if matches_dict:
         
         if analysis_data:
             signal = analysis_data.get("signal", "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal")
-            forma = analysis_data.get("forma_i_golovi", "Analiza forme trenutno u izradi.")
-            tempo = analysis_data.get("tempo_1h", "Očekuje se pritisak u ranim minutama.")
+            forma = analysis_data.get("forma_i_golovi", "Analiza forme u izradi.")
+            tempo = analysis_data.get("tempo_1h", "Očekuje se otvoren početak.")
             zakljucak = analysis_data.get("zakljucak", f"Ciljani Cash Out na {m['target']}.")
         else:
             signal = "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal"
-            h_s = m["h_stats"]
-            a_s = m["a_stats"]
-            if h_s and a_s:
-                forma = f"{m['home']} prosjek {h_s['avg']} gola ({h_s['pct']}% Over 2.5). {m['away']} prosjek {a_s['avg']} gola ({a_s['pct']}% Over 2.5)."
-            else:
-                forma = f"Implicirana kladioničarska vjerojatnost iznosi {round((1/m['odds'])*100, 1)}%."
+            implied_prob = round((1 / m['odds']) * 100, 1)
+            forma = f"Kladioničarska implicirana vjerojatnost iznosi {implied_prob}%."
             tempo = "Preporučuje se praćenje In-Play statistike opasnih napada."
             zakljucak = f"Ciljani Cash Out profil na {m['target']} (20% profita)."
 
