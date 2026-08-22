@@ -10,53 +10,88 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 matches_dict = {}
 now_utc = datetime.now(timezone.utc)
-local_offset = timedelta(hours=2)
+local_offset = timedelta(hours=2) # CEST
+update_timestamp = (now_utc + local_offset).strftime("%d.%m.%Y. u %H:%M:%S")
 
-if ODDS_API_KEY:
-    url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
-    try:
-        res = requests.get(url)
-        data = res.json()
-        if isinstance(data, list):
-            for match in data:
-                if not str(match.get("sport_key", "")).startswith("soccer"):
-                    continue
-                commence_str = match.get("commence_time")
-                if not commence_str:
-                    continue
-                commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
-                if commence_dt <= now_utc:
-                    continue
+status_message = ""
+
+if not ODDS_API_KEY:
+    status_message = "⚠️ Nije postavljen ODDS_API_KEY u GitHub Secrets."
+else:
+    # Pretražujemo glavne nogometne lige direktno
+    leagues = [
+        "soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga",
+        "soccer_italy_serie_a", "soccer_france_ligue_one", "soccer_netherlands_eredivisie",
+        "soccer_portugal_primeira_liga", "soccer_turkey_super_league", "soccer_poland_ekstraklasa",
+        "soccer_belgium_first_div", "soccer_germany_bundesliga2", "soccer_spain_segunda_division"
+    ]
+    
+    for l_key in leagues:
+        if len(matches_dict) >= 10:
+            break
+            
+        url = f"https://api.the-odds-api.com/v4/sports/{l_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+        try:
+            res = requests.get(url)
+            
+            if res.status_code in [401, 429]:
+                status_message = f"⚠️ PREKORAČEN JE BESPLATNI MJESEČNI LIMIT NA ODDS API-JU (Status {res.status_code})."
+                break
                 
-                local_dt = commence_dt + local_offset
-                formatted_time = local_dt.strftime("%d.%m. u %H:%M")
-                home = match.get("home_team", "")
-                away = match.get("away_team", "")
-                league = match.get("sport_title", "Nogomet")
-                match_key = f"{home} vs {away}"
-                
-                if match_key in matches_dict:
-                    continue
-                
-                for bm in match.get("bookmakers", []):
-                    for mkt in bm.get("markets", []):
-                        if mkt.get("key") == "totals":
-                            for outcome in mkt.get("outcomes", []):
-                                if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
-                                    price = outcome.get("price", 0)
-                                    if 1.60 <= price <= 1.85:
-                                        matches_dict[match_key] = {
-                                            "teams": match_key,
-                                            "home": home,
-                                            "away": away,
-                                            "time": formatted_time,
-                                            "league": league,
-                                            "odds": price,
-                                            "target": round(price / 1.20, 2)
-                                        }
-                                        break
-    except Exception as e:
-        print(f"Error Odds API: {e}")
+            data = res.json()
+            if isinstance(data, dict) and "message" in data:
+                status_message = f"⚠️ Odds API poruka: {data['message']}"
+                break
+
+            if isinstance(data, list):
+                for match in data:
+                    if len(matches_dict) >= 10:
+                        break
+                        
+                    commence_str = match.get("commence_time")
+                    if not commence_str:
+                        continue
+                        
+                    commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
+                    if commence_dt <= now_utc:
+                        continue
+                    
+                    local_dt = commence_dt + local_offset
+                    formatted_time = local_dt.strftime("%d.%m. u %H:%M")
+                    home = match.get("home_team", "")
+                    away = match.get("away_team", "")
+                    league = match.get("sport_title", "Nogomet")
+                    match_key = f"{home} vs {away}"
+                    
+                    if match_key in matches_dict:
+                        continue
+                    
+                    found_price = None
+                    for bm in match.get("bookmakers", []):
+                        for mkt in bm.get("markets", []):
+                            if mkt.get("key") == "totals":
+                                for outcome in mkt.get("outcomes", []):
+                                    if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
+                                        price = outcome.get("price", 0)
+                                        if 1.60 <= price <= 1.85:
+                                            found_price = price
+                                            break
+                                    if found_price: break
+                            if found_price: break
+                        if found_price: break
+                        
+                    if found_price:
+                        matches_dict[match_key] = {
+                            "teams": match_key,
+                            "home": home,
+                            "away": away,
+                            "time": formatted_time,
+                            "league": league,
+                            "odds": found_price,
+                            "target": round(found_price / 1.20, 2)
+                        }
+        except Exception as e:
+            print(f"Greška liga {l_key}: {e}")
 
 ai_analyses = {}
 if GEMINI_API_KEY and matches_dict:
@@ -85,7 +120,9 @@ if GEMINI_API_KEY and matches_dict:
         print(f"Error AI: {e}")
 
 table_rows = ""
-if matches_dict:
+if status_message:
+    table_rows = f"<tr><td colspan='5' style='text-align:center; color:#ef4444; font-weight:bold; padding:20px;'>{status_message}</td></tr>"
+elif matches_dict:
     for match_key, m in matches_dict.items():
         analysis_data = ai_analyses.get(match_key, {})
         signal = analysis_data.get("signal", "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal")
@@ -114,9 +151,7 @@ if matches_dict:
         </tr>
         """
 else:
-    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema nadolazećih mečeva u rasponu 1.60 - 1.85.</td></tr>"
-
-update_timestamp = (now_utc + local_offset).strftime("%d.%m.%Y. u %H:%M:%S")
+    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema nadolazećih mečeva u rasponu 1.60 - 1.85 za odabrane lige.</td></tr>"
 
 html_template = """<!DOCTYPE html>
 <html lang="hr">
