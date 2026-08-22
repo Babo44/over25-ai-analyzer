@@ -1,6 +1,5 @@
 import os
 import json
-import re
 import requests
 from datetime import datetime, timezone, timedelta
 import google.generativeai as genai
@@ -18,8 +17,7 @@ api_limit_exceeded = False
 
 if ODDS_API_KEY:
     try:
-        # 1. Provjera aktivnih nogometnih liga i stanja limita
-        sports_url = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
+        sports_url = f"[https://api.the-odds-api.com/v4/sports/?apiKey=](https://api.the-odds-api.com/v4/sports/?apiKey=){ODDS_API_KEY}"
         sports_req = requests.get(sports_url)
         
         if sports_req.status_code in [401, 429]:
@@ -47,10 +45,9 @@ if ODDS_API_KEY:
 
             raw_matches = []
 
-            # 2. Pretražujemo lige i provjeravamo limit za svaki poziv
             if not api_limit_exceeded:
                 for s_key in soccer_keys:
-                    odds_url = f"https://api.the-odds-api.com/v4/sports/{s_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+                    odds_url = f"[https://api.the-odds-api.com/v4/sports/](https://api.the-odds-api.com/v4/sports/){s_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
                     odds_req = requests.get(odds_url)
                     
                     if odds_req.status_code in [401, 429]:
@@ -114,7 +111,7 @@ if ODDS_API_KEY:
     except Exception as e:
         print(f"Greška Odds API: {e}")
 
-# 3. Generiranje AI analize preko provjerenih Gemini modela
+# Striktna JSON AI analiza pomoću response_mime_type
 ai_analyses = {}
 
 if GEMINI_API_KEY and matches_dict and not api_limit_exceeded:
@@ -134,40 +131,40 @@ if GEMINI_API_KEY and matches_dict and not api_limit_exceeded:
         Ti si profesionalni kladioničarski analitičar. Napiši bogatu i detaljnu analizu forme i golova za sljedeće parove:
         {prompt_text}
 
-        Za SVAKI par vrati ODGOVOR ISKLJUČIVO u valjanom JSON formatu s ključevima M_1, M_2 itd.:
+        Vrati ODGOVOR ISKLJUČIVO kao čisti JSON objekt gdje su ključevi M_1, M_2 itd.:
         {{
           "M_1": {{
              "signal": "🟢 A+ Signal" (ako su jake šanse za golove) ili "🟡 B Signal",
-             "forma_i_golovi": "Kratak opis forme obje ekipe u zadnjih 5 mečeva, prosjek golova i % Over 2.5.",
+             "forma_i_golovi": "Kratak detaljan opis forme obje ekipe u zadnjih 5 mečeva, prosjek golova i % Over 2.5.",
              "tempo_1h": "Procjena prolaznosti Over 0.5 HT i tempa u 1. poluvremenu.",
              "zakljucak": "Trgovačka preporuka za In-Play ulazak i Cash Out."
           }}
         }}
         """
         
-        # Lista provjerenih stabilnih modela
-        candidate_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"]
+        candidate_models = ["gemini-1.5-flash", "gemini-1.5-pro"]
         
         for model_name in candidate_models:
             try:
-                model = genai.GenerativeModel(model_name)
+                # Prisiljavamo model da vraća striktni JSON
+                model = genai.GenerativeModel(
+                    model_name,
+                    generation_config={"response_mime_type": "application/json"}
+                )
                 res = model.generate_content(prompt)
                 
-                json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
-                if json_match:
-                    parsed_json = json.loads(json_match.group(0))
-                    for match_id, analysis in parsed_json.items():
-                        if match_id in id_to_key:
-                            ai_analyses[id_to_key[match_id]] = analysis
-                    print(f"Uspješno generirano preko AI modela: {model_name}")
-                    break
+                parsed_json = json.loads(res.text)
+                for match_id, analysis in parsed_json.items():
+                    if match_id in id_to_key:
+                        ai_analyses[id_to_key[match_id]] = analysis
+                print(f"Uspješno generiran čisti JSON preko: {model_name}")
+                break
             except Exception as mod_err:
-                print(f"Model {model_name} nije uspio: {mod_err}")
+                print(f"Model {model_name} greška: {mod_err}")
                 
     except Exception as e:
         print(f"AI greška: {e}")
 
-# 4. Prikaz HTML Tablice s točnim otpakiravanjem .items()
 table_rows = ""
 
 if api_limit_exceeded:
@@ -233,34 +230,4 @@ html_content = f"""
         .badge {{ padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block; whitespace: nowrap; }}
         .badge-a {{ background-color: #065f46; color: #34d399; border: 1px solid #059669; }}
         .badge-b {{ background-color: #78350f; color: #fbbf24; border: 1px solid #d97706; }}
-        .footer {{ margin-top: 25px; font-size: 12px; color: #64748b; text-align: right; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Over 2.5 Trading Dashboard (Danas)</h1>
-        <p>Današnji aktivni In-Play signali (1.60 - 1.85) poređani kronološki s izračunom 20% Cash Out profita i AI analizom forme.</p>
-        <table>
-            <thead>
-                <tr>
-                    <th>Utakmica & Vrijeme</th>
-                    <th>Liga</th>
-                    <th>Tečaj & Cilj</th>
-                    <th>Signal</th>
-                    <th>Stvarna Forma, Golovi & Trading Plan</th>
-                </tr>
-            </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
-        </table>
-        <div class="footer">Zadnje automatsko osvježavanje: {update_timestamp} (CEST)</div>
-    </div>
-</body>
-</html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-
-print("Kraj izvršavanja skripte.")
+        .footer {{ margin-top: 25px; font-size
