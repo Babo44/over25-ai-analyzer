@@ -17,7 +17,7 @@ api_limit_exceeded = False
 
 if ODDS_API_KEY:
     try:
-        sports_url = f"[https://api.the-odds-api.com/v4/sports/?apiKey=](https://api.the-odds-api.com/v4/sports/?apiKey=){ODDS_API_KEY}"
+        sports_url = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
         sports_req = requests.get(sports_url)
         
         if sports_req.status_code in [401, 429]:
@@ -47,7 +47,7 @@ if ODDS_API_KEY:
 
             if not api_limit_exceeded:
                 for s_key in soccer_keys:
-                    odds_url = f"[https://api.the-odds-api.com/v4/sports/](https://api.the-odds-api.com/v4/sports/){s_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+                    odds_url = f"https://api.the-odds-api.com/v4/sports/{s_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
                     odds_req = requests.get(odds_url)
                     
                     if odds_req.status_code in [401, 429]:
@@ -111,7 +111,6 @@ if ODDS_API_KEY:
     except Exception as e:
         print(f"Greška Odds API: {e}")
 
-# Striktna JSON AI analiza pomoću response_mime_type
 ai_analyses = {}
 
 if GEMINI_API_KEY and matches_dict and not api_limit_exceeded:
@@ -146,7 +145,6 @@ if GEMINI_API_KEY and matches_dict and not api_limit_exceeded:
         
         for model_name in candidate_models:
             try:
-                # Prisiljavamo model da vraća striktni JSON
                 model = genai.GenerativeModel(
                     model_name,
                     generation_config={"response_mime_type": "application/json"}
@@ -211,23 +209,54 @@ else:
 
 update_timestamp = local_now.strftime("%d.%m.%Y. u %H:%M:%S")
 
-html_content = f"""
-<!DOCTYPE html>
+html_template = """<!DOCTYPE html>
 <html lang="hr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Over 2.5 Trading Dashboard</title>
     <style>
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }}
-        .container {{ max-width: 1150px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }}
-        h1 {{ color: #38bdf8; margin-top: 0; font-size: 24px; }}
-        p {{ color: #94a3b8; font-size: 14px; margin-bottom: 20px; }}
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ padding: 14px; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; }}
-        th {{ background-color: #334155; color: #38bdf8; font-weight: 600; }}
-        tr:hover {{ background-color: #243347; }}
-        .badge {{ padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block; whitespace: nowrap; }}
-        .badge-a {{ background-color: #065f46; color: #34d399; border: 1px solid #059669; }}
-        .badge-b {{ background-color: #78350f; color: #fbbf24; border: 1px solid #d97706; }}
-        .footer {{ margin-top: 25px; font-size
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
+        .container { max-width: 1150px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        h1 { color: #38bdf8; margin-top: 0; font-size: 24px; }
+        p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 14px; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; }
+        th { background-color: #334155; color: #38bdf8; font-weight: 600; }
+        tr:hover { background-color: #243347; }
+        .badge { padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block; whitespace: nowrap; }
+        .badge-a { background-color: #065f46; color: #34d399; border: 1px solid #059669; }
+        .badge-b { background-color: #78350f; color: #fbbf24; border: 1px solid #d97706; }
+        .footer { margin-top: 25px; font-size: 12px; color: #64748b; text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Over 2.5 Trading Dashboard (Danas)</h1>
+        <p>Današnji aktivni In-Play signali (1.60 - 1.85) poređani kronološki s izračunom 20% Cash Out profita i AI analizom forme.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Utakmica & Vrijeme</th>
+                    <th>Liga</th>
+                    <th>Tečaj & Cilj</th>
+                    <th>Signal</th>
+                    <th>Stvarna Forma, Golovi & Trading Plan</th>
+                </tr>
+            </thead>
+            <tbody>
+                __TABLE_ROWS__
+            </tbody>
+        </table>
+        <div class="footer">Zadnje automatsko osvježavanje: __TIMESTAMP__ (CEST)</div>
+    </div>
+</body>
+</html>
+"""
+
+html_content = html_template.replace("__TABLE_ROWS__", table_rows).replace("__TIMESTAMP__", update_timestamp)
+
+with open("index.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print("Kraj izvršavanja skripte.")
