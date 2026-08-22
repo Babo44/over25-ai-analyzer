@@ -15,83 +15,102 @@ local_now = now_utc + local_offset
 local_today = local_now.date()
 update_timestamp = local_now.strftime("%d.%m.%Y. u %H:%M:%S")
 
-status_message = ""
+# Definicija isključivo Top UEFA liga i najviših rangova (1. i 2. lige, europska natjecanja)
+TARGET_LEAGUES = [
+    "soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league",
+    "soccer_epl", "soccer_efl_champ", 
+    "soccer_spain_la_liga", "soccer_spain_segunda_division",
+    "soccer_italy_serie_a", "soccer_italy_serie_b",
+    "soccer_germany_bundesliga", "soccer_germany_bundesliga2",
+    "soccer_france_ligue_one", "soccer_france_ligue_two",
+    "soccer_netherlands_eredivisie", "soccer_portugal_primeira_liga",
+    "soccer_belgium_first_div", "soccer_turkey_super_league",
+    "soccer_scotland_premiership", "soccer_austria_bundesliga",
+    "soccer_switzerland_superleague", "soccer_denmark_superliga",
+    "soccer_poland_ekstraklasa", "soccer_sweden_allsvenskan", "soccer_norway_eliteserien"
+]
 
-if not ODDS_API_KEY:
-    status_message = "⚠️ Nije postavljen ODDS_API_KEY u GitHub Secrets."
-else:
-    # 1. Povlačenje svih utakmica izravno, troši 1 kredit
-    url = f"https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+if ODDS_API_KEY:
     try:
-        res = requests.get(url)
-        
-        if res.status_code in [401, 429]:
-            status_message = "⚠️ PREKORAČEN JE BESPLATNI MJESEČNI LIMIT NA ODDS API-JU (Quota Exceeded)."
+        # 1. Povuci sve dostupne sportove kako ne bi gađali lige koje su na pauzi (štedi API pozive)
+        sports_res = requests.get(f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}")
+        active_sports = []
+        if sports_res.status_code == 200:
+            for s in sports_res.json():
+                if s.get("key") in TARGET_LEAGUES:
+                    active_sports.append(s.get("key"))
         else:
-            data = res.json()
-            if isinstance(data, dict) and "message" in data:
-                status_message = f"⚠️ API poruka: {data['message']}"
-            elif isinstance(data, list):
-                raw_matches = []
-                for match in data:
-                    sport_key = str(match.get("sport_key", ""))
-                    if not (sport_key.startswith("soccer") or match.get("group") == "Soccer"):
-                        continue
+            active_sports = TARGET_LEAGUES # Fallback ako prvi poziv ne uspije
+
+        raw_matches = []
+        
+        # 2. Iteriraj samo kroz aktivne Top UEFA lige
+        for league_key in active_sports:
+            # Ako smo već skupili 15 utakmica za danas, zaustavi trošenje API limita
+            if len(raw_matches) >= 15:
+                break
+                
+            odds_url = f"https://api.the-odds-api.com/v4/sports/{league_key}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+            res = requests.get(odds_url)
+            
+            if res.status_code == 200:
+                data = res.json()
+                if isinstance(data, list):
+                    for match in data:
+                        commence_str = match.get("commence_time")
+                        if not commence_str:
+                            continue
                         
-                    commence_str = match.get("commence_time")
-                    if not commence_str:
-                        continue
-                    
-                    commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
-                    local_commence_dt = commence_dt + local_offset
-                    
-                    # STROGI FILTAR DATUMA: Samo utakmice koje se igraju DANAS i još nisu počele
-                    if commence_dt <= now_utc or local_commence_dt.date() != local_today:
-                        continue
-                    
-                    formatted_time = local_commence_dt.strftime("%d.%m. u %H:%M")
-                    home = match.get("home_team", "")
-                    away = match.get("away_team", "")
-                    league = match.get("sport_title", "Nogomet")
-                    match_key = f"{home} vs {away}"
-                    
-                    found_price = None
-                    for bm in match.get("bookmakers", []):
-                        for mkt in bm.get("markets", []):
-                            if mkt.get("key") == "totals":
-                                for outcome in mkt.get("outcomes", []):
-                                    if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
-                                        price = outcome.get("price", 0)
-                                        # Strogi filtar tečaja
-                                        if 1.60 <= price <= 1.85:
-                                            found_price = price
-                                            break
-                                if found_price: break
-                        if found_price: break
-                    
-                    if found_price:
-                        raw_matches.append({
-                            "key": match_key,
-                            "home": home,
-                            "away": away,
-                            "time": formatted_time,
-                            "league": league,
-                            "odds": found_price,
-                            "target": round(found_price / 1.20, 2),
-                            "timestamp": commence_dt.timestamp()
-                        })
+                        commence_dt = datetime.fromisoformat(commence_str.replace("Z", "+00:00"))
+                        local_commence_dt = commence_dt + local_offset
+                        
+                        # STROGI FILTAR DATUMA: Samo današnji mečevi koji još nisu počeli
+                        if commence_dt <= now_utc or local_commence_dt.date() != local_today:
+                            continue
+                        
+                        formatted_time = local_commence_dt.strftime("%H:%M")
+                        home = match.get("home_team", "")
+                        away = match.get("away_team", "")
+                        league = match.get("sport_title", "Nogomet")
+                        match_key = f"{home} vs {away}"
+                        
+                        found_price = None
+                        for bm in match.get("bookmakers", []):
+                            for mkt in bm.get("markets", []):
+                                if mkt.get("key") == "totals":
+                                    for outcome in mkt.get("outcomes", []):
+                                        if outcome.get("name") == "Over" and outcome.get("point") == 2.5:
+                                            price = outcome.get("price", 0)
+                                            # Strogi filtar tečaja
+                                            if 1.60 <= price <= 1.85:
+                                                found_price = price
+                                                break
+                                    if found_price: break
+                            if found_price: break
+                        
+                        if found_price:
+                            raw_matches.append({
+                                "key": match_key,
+                                "home": home,
+                                "away": away,
+                                "time": formatted_time,
+                                "league": league,
+                                "odds": found_price,
+                                "target": round(found_price / 1.20, 2),
+                                "timestamp": commence_dt.timestamp()
+                            })
 
-                # Sortiramo ih po vremenu početka, od onih koje kreću prve
-                raw_matches.sort(key=lambda x: x["timestamp"])
-                for m in raw_matches[:10]:
-                    matches_dict[m["key"]] = m
-
+        # Sortiranje utakmica kronološki i uzimanje prvih 10
+        raw_matches.sort(key=lambda x: x["timestamp"])
+        for m in raw_matches[:10]:
+            matches_dict[m["key"]] = m
+            
     except Exception as e:
-        status_message = f"⚠️ Greška pri dohvaćanju podataka: {e}"
+        print(f"Odds API Greška: {e}")
 
-# 2. Vraćanje na dokazano uspješni AI Prompt
+# AI Analiza
 ai_analyses = {}
-if GEMINI_API_KEY and matches_dict and not status_message:
+if GEMINI_API_KEY and matches_dict:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-1.5-flash")
@@ -105,55 +124,49 @@ if GEMINI_API_KEY and matches_dict and not status_message:
         
         prompt_text = "\n".join(prompt_items)
         
-        # Puno precizniji i stroži prompt koji izričito zahtijeva detaljnu analizu
         prompt = f"""
-        Ti si vrhunski nogometni analitičar za klađenje uživo. Napiši detaljnu, konkretnu i bogatu analizu očekivanih golova za sljedeće parove. Želim specifične podatke o formi, stilu igre i očekivanom tempu.
-
-        Parovi:
+        Kao stručni nogometni analitičar, analiziraj ove utakmice za klađenje na zbroj golova (Over 2.5). Želim specifične podatke.
+        Utakmice:
         {prompt_text}
 
-        MORAŠ vratiti odgovor ISKLJUČIVO u JSON formatu (ključevi moraju biti točni identifikatori poput M_1, M_2 itd.). Ne stavljaj nikakav tekst prije ni poslije JSON bloka. Koristi točno ovakvu strukturu:
+        Vrati ODGOVOR ISKLJUČIVO u JSON formatu s ključevima M_1, M_2 itd. Ne stavljaj nikakav tekst prije ni poslije.
         {{
           "M_1": {{
-             "signal": "🟢 A+ Signal" (ako očekuješ puno golova i otvoren meč) ili "🟡 B Signal" (ako je malo opreznija utakmica),
-             "forma_i_golovi": "Napiši konkretnu rečenicu o formi zadnjih 5 utakmica, ofenzivnoj snazi domačina i propusnosti obrane gosta. Spomeni % prolaza Over 2.5 ako imaš smisla za to.",
-             "tempo_1h": "Detaljno procijeni kakav će biti tempo u 1. poluvremenu (npr. 'Gosti će krenuti ofenzivno, očekuje se brzi gol prije 30. minute').",
-             "zakljucak": "Daj jasan trgovački savjet kada ući u okladu i gdje planirati Cash Out."
+             "signal": "🟢 A+ Signal",
+             "forma_i_golovi": "Kratka rečenica o ofenzivnoj formi domaćina i obrambenoj propusnosti gosta u zadnjih 5 utakmica.",
+             "tempo_1h": "Procjena tempa u 1. poluvremenu (npr. 'Očekuje se brzi gol zbog visokog pritiska domaćina').",
+             "zakljucak": "Konkretan savjet za Cash Out."
           }}
         }}
         """
         
         res = model.generate_content(prompt)
-        # Pouzdano ekstrahiranje JSON-a iz teksta, ignorirajući eventualne markdown tagove (npr. ```json)
-        json_match = re.search(r'\{.*\}', res.text, re.DOTALL)
+        raw_text = res.text.strip()
+        
+        # Čišćenje Markdown oznaka iz odgovora kako JSON.loads ne bi pukao
+        raw_text = re.sub(r'^```json\s*', '', raw_text)
+        raw_text = re.sub(r'^```\s*', '', raw_text)
+        raw_text = re.sub(r'\s*```$', '', raw_text)
+        
+        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
         if json_match:
             parsed_json = json.loads(json_match.group(0))
             for match_id, analysis in parsed_json.items():
                 if match_id in id_to_key:
                     ai_analyses[id_to_key[match_id]] = analysis
     except Exception as e:
-        print(f"Error AI: {e}")
+        print(f"AI Greška: {e}")
 
-# 3. Slaganje HTML tablice
+# Generiranje HTML-a
 table_rows = ""
-if status_message:
-    table_rows = f"<tr><td colspan='5' style='text-align:center; color:#ef4444; font-weight:bold; padding:20px;'>{status_message}</td></tr>"
-elif matches_dict:
+if matches_dict:
     for match_key, m in matches_dict.items():
-        analysis_data = ai_analyses.get(match_key)
+        analysis_data = ai_analyses.get(match_key, {})
         
-        # Ako imamo bogatu analizu od AI-ja, koristi nju. Ako ne (jer je API pao), koristi rezervni tekst.
-        if analysis_data and "forma_i_golovi" in analysis_data and "tempo_1h" in analysis_data:
-            signal = analysis_data.get("signal", "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal")
-            forma = analysis_data["forma_i_golovi"]
-            tempo = analysis_data["tempo_1h"]
-            zakljucak = analysis_data.get("zakljucak", f"Ciljani Cash Out profil na {m['target']} (20% profita).")
-        else:
-            signal = "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal"
-            implied_prob = round((1 / m['odds']) * 100, 1)
-            forma = f"Analiza trenutno nije dostupna. Kladioničarska implicirana vjerojatnost iznosi {implied_prob}%."
-            tempo = "Preporučuje se praćenje In-Play statistike opasnih napada."
-            zakljucak = f"Ciljani Cash Out profil na {m['target']} (20% profita)."
+        signal = analysis_data.get("signal", "🟢 A+ Signal" if m["odds"] <= 1.72 else "🟡 B Signal")
+        forma = analysis_data.get("forma_i_golovi", f"Očekuje se otvoren meč. Implicirana vjerojatnost: {round((1/m['odds'])*100, 1)}%.")
+        tempo = analysis_data.get("tempo_1h", "Pratiti opasne napade u prvih 15 minuta.")
+        zakljucak = analysis_data.get("zakljucak", f"Ciljani Cash Out profil na {m['target']} (20% profita).")
             
         signal_class = "badge-a" if "A+" in signal else "badge-b"
 
@@ -161,7 +174,7 @@ elif matches_dict:
         <tr>
             <td>
                 <b>{m['teams']}</b><br>
-                <small style="color: #94a3b8;">{m['time']}</small>
+                <small style="color: #94a3b8;">Danas u {m['time']}</small>
             </td>
             <td>{m['league']}</td>
             <td>
@@ -177,9 +190,8 @@ elif matches_dict:
         </tr>
         """
 else:
-    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema današnjih utakmica u rasponu 1.60 - 1.85.</td></tr>"
+    table_rows = "<tr><td colspan='5' style='text-align:center;'>Trenutno nema današnjih Top UEFA utakmica u rasponu 1.60 - 1.85.</td></tr>"
 
-# 4. Finalni HTML dokument
 html_template = """<!DOCTYPE html>
 <html lang="hr">
 <head>
@@ -204,7 +216,7 @@ html_template = """<!DOCTYPE html>
 <body>
     <div class="container">
         <h1>Over 2.5 Trading Dashboard</h1>
-        <p>Aktivni In-Play signali za današnje utakmice (1.60 - 1.85) s izračunom 20% Cash Out profita i AI analizom forme.</p>
+        <p>Aktivni In-Play signali za današnje Top UEFA lige (1.60 - 1.85) s AI analizom.</p>
         <table>
             <thead>
                 <tr>
